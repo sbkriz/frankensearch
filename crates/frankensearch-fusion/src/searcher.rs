@@ -1333,7 +1333,11 @@ impl TwoTierSearcher {
                     doc_id: hit.doc_id.clone(),
                     score: hit.score,
                     source,
-                    index: if hit.index == u32::MAX { None } else { Some(hit.index) },
+                    index: if hit.index == u32::MAX {
+                        None
+                    } else {
+                        Some(hit.index)
+                    },
                     fast_score,
                     quality_score,
                     lexical_score: initial.and_then(|result| result.lexical_score),
@@ -1854,10 +1858,7 @@ impl TwoTierSearcher {
             .resource_cpu_state
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
-        let cpu_pct = cpu_pct_from_jiffies(
-            *cpu_state,
-            current,
-        );
+        let cpu_pct = cpu_pct_from_jiffies(*cpu_state, current);
         *cpu_state = Some(current);
         cpu_pct
     }
@@ -2001,10 +2002,7 @@ fn telemetry_instance_for_adapter(host_adapter: &dyn HostAdapter) -> TelemetryIn
 }
 
 #[allow(clippy::cast_precision_loss)]
-fn cpu_pct_from_jiffies(
-    previous: Option<CpuJiffiesSnapshot>,
-    current: CpuJiffiesSnapshot,
-) -> f64 {
+fn cpu_pct_from_jiffies(previous: Option<CpuJiffiesSnapshot>, current: CpuJiffiesSnapshot) -> f64 {
     let Some(previous) = previous else {
         return 0.0;
     };

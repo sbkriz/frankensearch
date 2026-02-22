@@ -122,15 +122,16 @@ pub fn mmr_rerank(
     let diversity_weight = 1.0 - lambda;
 
     // Normalize relevance scores to [0, 1] for fair comparison with cosine sim.
-    let (min_score, max_score) = scores[..n]
-        .iter()
-        .fold((f64::INFINITY, f64::NEG_INFINITY), |(mn, mx), &s| {
-            if s.is_finite() {
-                (mn.min(s), mx.max(s))
-            } else {
-                (mn, mx)
-            }
-        });
+    let (min_score, max_score) =
+        scores[..n]
+            .iter()
+            .fold((f64::INFINITY, f64::NEG_INFINITY), |(mn, mx), &s| {
+                if s.is_finite() {
+                    (mn.min(s), mx.max(s))
+                } else {
+                    (mn, mx)
+                }
+            });
     let score_range = max_score - min_score;
     let norm_scores: Vec<f64> = scores[..n]
         .iter()
@@ -156,11 +157,7 @@ pub fn mmr_rerank(
         .enumerate()
         .fold((0, f64::NEG_INFINITY), |(best_i, best_s), (i, &s)| {
             // > ensures we only update if strictly greater, keeping the first max.
-            if s > best_s {
-                (i, s)
-            } else {
-                (best_i, best_s)
-            }
+            if s > best_s { (i, s) } else { (best_i, best_s) }
         })
         .0;
 
