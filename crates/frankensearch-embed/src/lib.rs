@@ -56,12 +56,10 @@ mod lite_fallback {
     pub fn ensure_default_semantic_models(
         model_root: Option<&Path>,
     ) -> SearchResult<EmbeddedModelInstallSummary> {
-        let root = model_root
-            .map(|p| p.to_path_buf())
-            .unwrap_or_else(|| {
-                crate::model_registry::ensure_model_storage_layout_checked()
-                    .unwrap_or_else(|_| PathBuf::from("models"))
-            });
+        let root = model_root.map(|p| p.to_path_buf()).unwrap_or_else(|| {
+            crate::model_registry::ensure_model_storage_layout_checked()
+                .unwrap_or_else(|_| PathBuf::from("models"))
+        });
         Ok(EmbeddedModelInstallSummary {
             model_root: root,
             models_written: 0,

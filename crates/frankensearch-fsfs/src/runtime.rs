@@ -2416,7 +2416,11 @@ fn release_checksum_url(tag: &str) -> String {
 /// Construct the asset filename for a given version and target triple.
 fn release_asset_filename(tag: &str, triple: &str) -> String {
     let version = tag.strip_prefix('v').unwrap_or(tag);
-    let ext = if triple.contains("windows") { "zip" } else { "tar.xz" };
+    let ext = if triple.contains("windows") {
+        "zip"
+    } else {
+        "tar.xz"
+    };
     format!("fsfs-{version}-{triple}.{ext}")
 }
 
@@ -5481,7 +5485,9 @@ impl FsfsRuntime {
 
                 // Keep the first non-empty snippet.
                 if let Some(snippet) = &hit.snippet {
-                    snippets.entry(hit.path.clone()).or_insert_with(|| snippet.clone());
+                    snippets
+                        .entry(hit.path.clone())
+                        .or_insert_with(|| snippet.clone());
                 }
 
                 // Track best ranks across all queries.
@@ -7660,8 +7666,7 @@ impl FsfsRuntime {
                         }
                     }
                 } else if is_probably_binary(&bytes) {
-                    observed_reason_codes
-                        .insert(REASON_DISCOVERY_FILE_BINARY_BLOCKED.to_owned());
+                    observed_reason_codes.insert(REASON_DISCOVERY_FILE_BINARY_BLOCKED.to_owned());
                     content_skipped_files = content_skipped_files.saturating_add(1);
                     continue;
                 } else {
@@ -14072,17 +14077,18 @@ fn remove_indexing_checkpoint(index_root: &Path) {
 #[cfg(not(feature = "embedded-models"))]
 fn emit_lite_build_model_hint(model_root: &Path) {
     let default_root = dirs::home_dir()
-        .map(|h| h.join(".local").join("share").join("frankensearch").join("models"))
+        .map(|h| {
+            h.join(".local")
+                .join("share")
+                .join("frankensearch")
+                .join("models")
+        })
         .unwrap_or_else(|| PathBuf::from("~/.local/share/frankensearch/models"));
     eprintln!();
     eprintln!("--- fsfs lite build: no embedded models ---");
     eprintln!();
-    eprintln!(
-        "This binary was built without bundled ML models (--no-default-features)."
-    );
-    eprintln!(
-        "Semantic search requires model files on disk. Looked in:"
-    );
+    eprintln!("This binary was built without bundled ML models (--no-default-features).");
+    eprintln!("Semantic search requires model files on disk. Looked in:");
     eprintln!("  1. {}", model_root.display());
     if model_root != default_root {
         eprintln!("  2. {}", default_root.display());
@@ -14092,9 +14098,7 @@ fn emit_lite_build_model_hint(model_root: &Path) {
     eprintln!();
     eprintln!("  fsfs download-models");
     eprintln!();
-    eprintln!(
-        "Or set FRANKENSEARCH_MODEL_DIR to point to an existing model cache."
-    );
+    eprintln!("Or set FRANKENSEARCH_MODEL_DIR to point to an existing model cache.");
     eprintln!("Until then, fsfs will fall back to hash-based embeddings (degraded quality).");
     eprintln!();
 }
@@ -18290,10 +18294,8 @@ mod tests {
     fn verify_new_binary_uses_version_subcommand_not_flag() {
         // Create a fake binary that succeeds on `version` subcommand
         // but fails on `--version` flag, proving we use the subcommand.
-        let dir = std::env::temp_dir().join(format!(
-            "fsfs_test_version_subcmd_{}",
-            std::process::id()
-        ));
+        let dir =
+            std::env::temp_dir().join(format!("fsfs_test_version_subcmd_{}", std::process::id()));
         let _ = fs::create_dir_all(&dir);
         let binary = dir.join("fsfs-verify-subcmd");
         fs::write(
@@ -18307,13 +18309,8 @@ mod tests {
 
         // This mirrors the verification logic at line 3712-3715 in collect_update_payload:
         //   Command::new(&current_exe).arg("version").output()
-        let verify = std::process::Command::new(&binary)
-            .arg("version")
-            .output();
-        assert!(
-            verify.is_ok(),
-            "command should execute successfully"
-        );
+        let verify = std::process::Command::new(&binary).arg("version").output();
+        assert!(verify.is_ok(), "command should execute successfully");
         let out = verify.unwrap();
         assert!(
             out.status.success(),
@@ -18331,17 +18328,11 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn verify_binary_returning_valid_version_output_passes() {
-        let dir = std::env::temp_dir().join(format!(
-            "fsfs_test_valid_version_{}",
-            std::process::id()
-        ));
+        let dir =
+            std::env::temp_dir().join(format!("fsfs_test_valid_version_{}", std::process::id()));
         let _ = fs::create_dir_all(&dir);
         let binary = dir.join("fsfs-valid");
-        fs::write(
-            &binary,
-            b"#!/bin/sh\necho \"fsfs 1.2.3\"\n",
-        )
-        .unwrap();
+        fs::write(&binary, b"#!/bin/sh\necho \"fsfs 1.2.3\"\n").unwrap();
 
         use std::os::unix::fs::PermissionsExt;
         fs::set_permissions(&binary, std::fs::Permissions::from_mode(0o755)).unwrap();
@@ -18360,17 +18351,11 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn verify_binary_returning_error_fails_gracefully() {
-        let dir = std::env::temp_dir().join(format!(
-            "fsfs_test_error_version_{}",
-            std::process::id()
-        ));
+        let dir =
+            std::env::temp_dir().join(format!("fsfs_test_error_version_{}", std::process::id()));
         let _ = fs::create_dir_all(&dir);
         let binary = dir.join("fsfs-broken");
-        fs::write(
-            &binary,
-            b"#!/bin/sh\necho \"segfault\" >&2\nexit 139\n",
-        )
-        .unwrap();
+        fs::write(&binary, b"#!/bin/sh\necho \"segfault\" >&2\nexit 139\n").unwrap();
 
         use std::os::unix::fs::PermissionsExt;
         fs::set_permissions(&binary, std::fs::Permissions::from_mode(0o755)).unwrap();
@@ -18409,10 +18394,8 @@ mod tests {
     #[test]
     fn checksum_valid_sha256_passes_verification() {
         // Write a known file and verify compute_sha256_of_file matches expected hash.
-        let dir = std::env::temp_dir().join(format!(
-            "fsfs_test_checksum_pass_{}",
-            std::process::id()
-        ));
+        let dir =
+            std::env::temp_dir().join(format!("fsfs_test_checksum_pass_{}", std::process::id()));
         let _ = fs::create_dir_all(&dir);
         let payload = dir.join("archive.tar.xz");
         fs::write(&payload, b"known content for checksum test").unwrap();
@@ -18457,10 +18440,8 @@ mod tests {
 
     #[test]
     fn checksum_case_insensitive_comparison() {
-        let dir = std::env::temp_dir().join(format!(
-            "fsfs_test_checksum_case_{}",
-            std::process::id()
-        ));
+        let dir =
+            std::env::temp_dir().join(format!("fsfs_test_checksum_case_{}", std::process::id()));
         let _ = fs::create_dir_all(&dir);
         let payload = dir.join("archive.tar.xz");
         fs::write(&payload, b"case test").unwrap();
@@ -18510,7 +18491,8 @@ mod tests {
     fn extract_hash_from_sums_returns_none_for_malformed_lines() {
         // Lines without the expected `<hash>  <filename>` format.
         let sums = "this-is-not-a-valid-line\njust-a-hash-no-filename\n";
-        let hash = super::extract_hash_from_sums(sums, "fsfs-1.0.0-x86_64-unknown-linux-musl.tar.xz");
+        let hash =
+            super::extract_hash_from_sums(sums, "fsfs-1.0.0-x86_64-unknown-linux-musl.tar.xz");
         assert_eq!(hash, None, "malformed lines should be silently skipped");
     }
 
@@ -18588,12 +18570,30 @@ mod tests {
     #[test]
     fn asset_name_construction_all_supported_platforms() {
         let triples = [
-            ("x86_64-unknown-linux-musl", "fsfs-1.0.0-x86_64-unknown-linux-musl.tar.xz"),
-            ("aarch64-unknown-linux-musl", "fsfs-1.0.0-aarch64-unknown-linux-musl.tar.xz"),
-            ("x86_64-apple-darwin", "fsfs-1.0.0-x86_64-apple-darwin.tar.xz"),
-            ("aarch64-apple-darwin", "fsfs-1.0.0-aarch64-apple-darwin.tar.xz"),
-            ("x86_64-pc-windows-msvc", "fsfs-1.0.0-x86_64-pc-windows-msvc.zip"),
-            ("aarch64-pc-windows-msvc", "fsfs-1.0.0-aarch64-pc-windows-msvc.zip"),
+            (
+                "x86_64-unknown-linux-musl",
+                "fsfs-1.0.0-x86_64-unknown-linux-musl.tar.xz",
+            ),
+            (
+                "aarch64-unknown-linux-musl",
+                "fsfs-1.0.0-aarch64-unknown-linux-musl.tar.xz",
+            ),
+            (
+                "x86_64-apple-darwin",
+                "fsfs-1.0.0-x86_64-apple-darwin.tar.xz",
+            ),
+            (
+                "aarch64-apple-darwin",
+                "fsfs-1.0.0-aarch64-apple-darwin.tar.xz",
+            ),
+            (
+                "x86_64-pc-windows-msvc",
+                "fsfs-1.0.0-x86_64-pc-windows-msvc.zip",
+            ),
+            (
+                "aarch64-pc-windows-msvc",
+                "fsfs-1.0.0-aarch64-pc-windows-msvc.zip",
+            ),
         ];
         for (triple, expected_filename) in triples {
             let filename = super::release_asset_filename("v1.0.0", triple);
@@ -18651,10 +18651,8 @@ mod tests {
     fn selftest_failure_captured_not_masked() {
         // Simulate a binary whose self-test writes to stderr and exits non-zero.
         // Verify the error output is captured (not lost via `|| true` or similar).
-        let dir = std::env::temp_dir().join(format!(
-            "fsfs_test_selftest_err_{}",
-            std::process::id()
-        ));
+        let dir =
+            std::env::temp_dir().join(format!("fsfs_test_selftest_err_{}", std::process::id()));
         let _ = fs::create_dir_all(&dir);
         let binary = dir.join("fsfs-selftest-fail");
         fs::write(
@@ -18667,9 +18665,7 @@ mod tests {
         fs::set_permissions(&binary, std::fs::Permissions::from_mode(0o755)).unwrap();
 
         // Mirrors the verification logic at line 3712-3735.
-        let verify = std::process::Command::new(&binary)
-            .arg("version")
-            .output();
+        let verify = std::process::Command::new(&binary).arg("version").output();
 
         match verify {
             Ok(out) if out.status.success() => {
@@ -18695,10 +18691,8 @@ mod tests {
     #[cfg(unix)]
     #[test]
     fn selftest_captures_both_stdout_and_stderr() {
-        let dir = std::env::temp_dir().join(format!(
-            "fsfs_test_selftest_both_{}",
-            std::process::id()
-        ));
+        let dir =
+            std::env::temp_dir().join(format!("fsfs_test_selftest_both_{}", std::process::id()));
         let _ = fs::create_dir_all(&dir);
         let binary = dir.join("fsfs-selftest-mixed");
         fs::write(
@@ -18758,7 +18752,9 @@ mod tests {
     #[test]
     fn archive_entry_path_is_safe_rejects_windows_prefix() {
         // Windows-style prefix paths should be rejected on Windows.
-        assert!(!super::archive_entry_path_is_safe("C:\\Windows\\System32\\evil.exe"));
+        assert!(!super::archive_entry_path_is_safe(
+            "C:\\Windows\\System32\\evil.exe"
+        ));
     }
 
     #[test]
@@ -18770,7 +18766,9 @@ mod tests {
     #[test]
     fn archive_entry_path_is_safe_rejects_parent_traversal_nested() {
         assert!(!super::archive_entry_path_is_safe("foo/../../etc/shadow"));
-        assert!(!super::archive_entry_path_is_safe("subdir/../../../root/.ssh/id_rsa"));
+        assert!(!super::archive_entry_path_is_safe(
+            "subdir/../../../root/.ssh/id_rsa"
+        ));
     }
 
     #[test]
