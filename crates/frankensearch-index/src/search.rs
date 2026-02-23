@@ -603,7 +603,7 @@ impl VectorIndex {
             .wal_entries
             .get(wal_idx)
             .ok_or_else(|| SearchError::IndexCorrupted {
-                path: PathBuf::new(),
+                path: self.path.clone(),
                 detail: format!(
                     "WAL index {} out of bounds (wal_entries.len() = {})",
                     wal_idx,
