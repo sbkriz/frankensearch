@@ -236,6 +236,8 @@ pub struct CliInput {
     pub quiet: bool,
     /// Disable ANSI colors in terminal output.
     pub no_color: bool,
+    /// Whether `--expand` was requested (LLM query expansion for search).
+    pub expand: bool,
 }
 
 /// Config subcommand actions.
@@ -602,6 +604,17 @@ where
                 input.no_color = true;
                 idx += 1;
             }
+            "--expand" => {
+                if command != CliCommand::Search {
+                    return Err(SearchError::InvalidConfig {
+                        field: "cli.flag".into(),
+                        value: "--expand".into(),
+                        reason: "--expand is only valid for the search command".into(),
+                    });
+                }
+                input.expand = true;
+                idx += 1;
+            }
             "--filter" => {
                 let value = expect_value(&tokens, idx, "--filter")?;
                 input.filter = Some(value.to_string());
@@ -944,6 +957,7 @@ fn is_known_cli_flag(token: &str) -> bool {
             | "--theme"
             | "--config"
             | "--index-dir"
+            | "--expand"
     )
 }
 

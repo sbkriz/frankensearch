@@ -9,6 +9,10 @@ repository.workspace = true
 keywords = ["search", "cli", "semantic", "bm25", "hybrid"]
 categories = ["command-line-utilities", "text-processing", "development-tools"]
 
+[features]
+default = ["embedded-models"]
+embedded-models = ["frankensearch-embed/bundled-default-models"]
+
 [lib]
 path = "src/lib.rs"
 
@@ -18,7 +22,7 @@ path = "src/main.rs"
 
 [dependencies]
 frankensearch-core = { workspace = true }
-frankensearch-embed = { workspace = true, default-features = false, features = ["hash", "model2vec", "fastembed", "download", "bundled-default-models"] }
+frankensearch-embed = { workspace = true, default-features = false, features = ["hash", "model2vec", "fastembed", "download"] }
 frankensearch-index = { workspace = true }
 frankensearch-lexical = { workspace = true }
 frankensearch-storage = { workspace = true }
@@ -47,6 +51,8 @@ sysinfo = { workspace = true }
 notify = "8.2.0"
 ignore = "0.4"
 sha2 = { workspace = true }
+pdf-extract = { workspace = true }
+ureq = { version = "3", features = ["json"] }
 
 [dev-dependencies]
 asupersync = { workspace = true }

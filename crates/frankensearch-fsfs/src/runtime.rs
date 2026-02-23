@@ -85,6 +85,7 @@ use crate::query_execution::{
     FusedCandidate, FusionPolicy as QueryFusionPolicy, LexicalCandidate,
     QueryExecutionOrchestrator, SemanticCandidate,
 };
+use crate::query_expansion;
 use crate::query_planning::{
     CapabilityState, QueryExecutionCapabilities, QueryIntentClass, QueryPlanner,
 };
@@ -1839,14 +1840,28 @@ impl LiveIngestPipeline {
             Err(error) => return Err(error.into()),
         };
 
-        if is_probably_binary(&bytes) {
-            self.prune_indexes(cx, &rel_key).await?;
-            Self::purge_storage_document(storage_ctx, &rel_key)?;
-            return Ok(true);
-        }
+        // PDF files are binary but contain extractable text.
+        // Try PDF extraction before the generic binary check.
+        let canonical = if is_pdf_file(&abs_path) {
+            match try_extract_pdf_text(&bytes, &abs_path) {
+                Some(pdf_text) => self.canonicalizer.canonicalize(&pdf_text),
+                None => {
+                    self.prune_indexes(cx, &rel_key).await?;
+                    Self::purge_storage_document(storage_ctx, &rel_key)?;
+                    return Ok(true);
+                }
+            }
+        } else {
+            if is_probably_binary(&bytes) {
+                self.prune_indexes(cx, &rel_key).await?;
+                Self::purge_storage_document(storage_ctx, &rel_key)?;
+                return Ok(true);
+            }
 
-        let raw_text = String::from_utf8_lossy(&bytes);
-        let canonical = self.canonicalizer.canonicalize(&raw_text);
+            let raw_text = String::from_utf8_lossy(&bytes);
+            self.canonicalizer.canonicalize(&raw_text)
+        };
+
         if canonical.trim().is_empty() {
             self.prune_indexes(cx, &rel_key).await?;
             Self::purge_storage_document(storage_ctx, &rel_key)?;
@@ -4209,7 +4224,11 @@ impl FsfsRuntime {
         }
 
         let started = Instant::now();
-        let payloads = if search_runtime.cli_input.daemon {
+        let payloads = if search_runtime.cli_input.expand {
+            search_runtime
+                .execute_expanded_search(cx, query, limit)
+                .await?
+        } else if search_runtime.cli_input.daemon {
             match search_runtime.search_payloads_via_daemon(query, limit) {
                 Ok(payloads) => payloads,
                 Err(error) => {
@@ -5364,6 +5383,151 @@ impl FsfsRuntime {
             );
         }
         Ok(payloads)
+    }
+
+    /// Execute search with LLM-powered query expansion.
+    ///
+    /// Calls the query expansion module to generate additional query variants,
+    /// runs each variant through the normal search pipeline, then fuses all
+    /// results using reciprocal rank fusion.
+    async fn execute_expanded_search(
+        &self,
+        cx: &Cx,
+        query: &str,
+        limit: usize,
+    ) -> SearchResult<Vec<SearchPayload>> {
+        let env_map: HashMap<String, String> = std::env::vars().collect();
+        let expansion = query_expansion::expand_query(query, &env_map);
+
+        info!(
+            original_query = query,
+            expansion_count = expansion.queries.len().saturating_sub(1),
+            backend = ?expansion.backend_used,
+            expansion_elapsed_ms = expansion.elapsed_ms,
+            "fsfs query expansion completed"
+        );
+
+        // If we only have the original query (no expansions), fast-path to normal search.
+        if expansion.queries.len() <= 1 {
+            return self
+                .execute_search_payloads_cached_for_cli(cx, query, limit)
+                .await;
+        }
+
+        // Gather payloads from each expanded query. Use a larger internal limit
+        // to get enough candidates for meaningful fusion.
+        let expansion_limit = limit.saturating_mul(2).max(limit);
+        let mut all_payloads: Vec<SearchPayload> = Vec::new();
+
+        for expanded in &expansion.queries {
+            info!(
+                strategy = expanded.strategy.label(),
+                query_text = expanded.text,
+                "fsfs expanded query: executing search variant"
+            );
+            let variant_payloads = self
+                .execute_search_payloads_with_mode(
+                    cx,
+                    &expanded.text,
+                    expansion_limit,
+                    SearchExecutionMode::Full,
+                )
+                .await?;
+            all_payloads.extend(variant_payloads);
+        }
+
+        // Fuse all results using cross-query reciprocal rank fusion.
+        let fused_payload =
+            Self::fuse_expanded_payloads(query, &all_payloads, limit, self.config.search.rrf_k);
+
+        Ok(vec![fused_payload])
+    }
+
+    /// Fuse search payloads from multiple expanded queries using RRF.
+    ///
+    /// Each payload contributes its ranked hits. Documents appearing in
+    /// multiple query results get boosted scores from each ranking list.
+    fn fuse_expanded_payloads(
+        original_query: &str,
+        payloads: &[SearchPayload],
+        limit: usize,
+        rrf_k: f64,
+    ) -> SearchPayload {
+        let k = if rrf_k.is_finite() && rrf_k > 0.0 {
+            rrf_k
+        } else {
+            60.0
+        };
+
+        // Accumulate RRF scores across all payload rankings.
+        let mut scores: HashMap<String, f64> = HashMap::new();
+        let mut snippets: HashMap<String, String> = HashMap::new();
+        let mut best_lexical_rank: HashMap<String, usize> = HashMap::new();
+        let mut best_semantic_rank: HashMap<String, usize> = HashMap::new();
+        let mut appeared_in_count: HashMap<String, usize> = HashMap::new();
+
+        for payload in payloads {
+            for hit in &payload.hits {
+                let contribution = 1.0 / (k + hit.rank as f64);
+                *scores.entry(hit.path.clone()).or_default() += contribution;
+                *appeared_in_count.entry(hit.path.clone()).or_default() += 1;
+
+                // Keep the first non-empty snippet.
+                if let Some(snippet) = &hit.snippet {
+                    snippets.entry(hit.path.clone()).or_insert_with(|| snippet.clone());
+                }
+
+                // Track best ranks across all queries.
+                if let Some(lr) = hit.lexical_rank {
+                    best_lexical_rank
+                        .entry(hit.path.clone())
+                        .and_modify(|existing| *existing = (*existing).min(lr))
+                        .or_insert(lr);
+                }
+                if let Some(sr) = hit.semantic_rank {
+                    best_semantic_rank
+                        .entry(hit.path.clone())
+                        .and_modify(|existing| *existing = (*existing).min(sr))
+                        .or_insert(sr);
+                }
+            }
+        }
+
+        // Sort by fused score descending, then by path for tie-break.
+        let mut ranked: Vec<(String, f64)> = scores.into_iter().collect();
+        ranked.sort_by(|a, b| {
+            b.1.partial_cmp(&a.1)
+                .unwrap_or(std::cmp::Ordering::Equal)
+                .then_with(|| a.0.cmp(&b.0))
+        });
+
+        let total_candidates = ranked.len();
+        let hits: Vec<SearchHitPayload> = ranked
+            .into_iter()
+            .take(limit)
+            .enumerate()
+            .map(|(idx, (path, score))| {
+                let lexical_rank = best_lexical_rank.get(&path).copied();
+                let semantic_rank = best_semantic_rank.get(&path).copied();
+                let in_multiple = appeared_in_count.get(&path).copied().unwrap_or(0) > 1;
+                SearchHitPayload {
+                    rank: idx.saturating_add(1),
+                    path: path.clone(),
+                    score,
+                    snippet: snippets.get(&path).cloned(),
+                    lexical_rank,
+                    semantic_rank,
+                    in_both_sources: in_multiple,
+                }
+            })
+            .collect();
+
+        SearchPayload::new(
+            original_query,
+            SearchOutputPhase::Refined,
+            total_candidates,
+            hits,
+        )
     }
 
     #[must_use]
@@ -7478,14 +7642,28 @@ impl FsfsRuntime {
                     Err(error) => return Err(error.into()),
                 };
 
-                if is_probably_binary(&bytes) {
-                    observed_reason_codes.insert(REASON_DISCOVERY_FILE_BINARY_BLOCKED.to_owned());
-                    content_skipped_files = content_skipped_files.saturating_add(1);
-                    continue;
-                }
+                // PDF files are binary but contain extractable text.
+                // Try PDF extraction before the generic binary check.
+                let canonical = if is_pdf_file(&candidate.file_path) {
+                    match try_extract_pdf_text(&bytes, &candidate.file_path) {
+                        Some(pdf_text) => canonicalizer.canonicalize(&pdf_text),
+                        None => {
+                            content_skipped_files = content_skipped_files.saturating_add(1);
+                            continue;
+                        }
+                    }
+                } else {
+                    if is_probably_binary(&bytes) {
+                        observed_reason_codes
+                            .insert(REASON_DISCOVERY_FILE_BINARY_BLOCKED.to_owned());
+                        content_skipped_files = content_skipped_files.saturating_add(1);
+                        continue;
+                    }
 
-                let raw_text = String::from_utf8_lossy(&bytes);
-                let canonical = canonicalizer.canonicalize(&raw_text);
+                    let raw_text = String::from_utf8_lossy(&bytes);
+                    canonicalizer.canonicalize(&raw_text)
+                };
+
                 if canonical.trim().is_empty() {
                     observed_reason_codes.insert(REASON_DISCOVERY_FILE_EXCLUDED.to_owned());
                     content_skipped_files = content_skipped_files.saturating_add(1);
@@ -13743,6 +13921,43 @@ fn is_probably_binary(data: &[u8]) -> bool {
         })
         .count();
     control_count.saturating_mul(5) > data.len()
+}
+
+/// Returns `true` if the file path has a `.pdf` extension (case-insensitive).
+fn is_pdf_file(path: &Path) -> bool {
+    path.extension()
+        .and_then(|ext| ext.to_str())
+        .is_some_and(|ext| ext.eq_ignore_ascii_case("pdf"))
+}
+
+/// Attempt to extract text from a digital PDF (one with selectable text).
+///
+/// Returns `Some(text)` on success, or `None` if the PDF is image-only,
+/// encrypted, corrupt, or extraction otherwise fails. Failures are logged
+/// at the `warn` level and the file is silently skipped.
+fn try_extract_pdf_text(bytes: &[u8], path: &Path) -> Option<String> {
+    match pdf_extract::extract_text_from_mem(bytes) {
+        Ok(text) => {
+            let trimmed = text.trim();
+            if trimmed.is_empty() {
+                info!(
+                    path = %path.display(),
+                    "PDF contains no extractable text (image-only?); skipping"
+                );
+                None
+            } else {
+                Some(text)
+            }
+        }
+        Err(error) => {
+            warn!(
+                path = %path.display(),
+                error = %error,
+                "PDF text extraction failed (encrypted/corrupt/image-only); skipping"
+            );
+            None
+        }
+    }
 }
 
 fn is_ignorable_index_walk_error(error: &std::io::Error) -> bool {

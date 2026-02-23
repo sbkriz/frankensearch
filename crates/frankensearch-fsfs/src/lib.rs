@@ -24,6 +24,7 @@ pub mod pressure;
 pub mod pressure_sensing;
 pub mod profiling;
 pub mod query_execution;
+pub mod query_expansion;
 pub mod query_latency_optimization;
 pub mod query_planning;
 pub mod ranking_priors;
@@ -159,6 +160,9 @@ pub use query_execution::{
     DegradationStatus, DegradationTransition, DegradedRetrievalMode, FusedCandidate, FusionPolicy,
     LexicalCandidate, QueryExecutionOrchestrator, QueryExecutionPlan, RetrievalStage,
     SemanticCandidate, StagePlan,
+};
+pub use query_expansion::{
+    ExpandedQuery, ExpansionResult, ExpansionStrategy, LlmBackend, expand_query,
 };
 pub use query_latency_optimization::{
     CorrectnessAssertion, CorrectnessProofKind, LatencyDecomposition, OptimizationMechanism,

@@ -92,6 +92,9 @@ toml = "1.0.3"
 # SHA-256 verification for model manifests
 sha2 = "0.10"
 
+# PDF text extraction (digital PDFs with selectable text)
+pdf-extract = "0.10"
+
 # Benchmarking
 criterion = { version = "0.8.2", features = ["html_reports"] }
 proptest = "1.6"
