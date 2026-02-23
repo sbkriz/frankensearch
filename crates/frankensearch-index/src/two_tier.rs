@@ -597,6 +597,8 @@ pub struct TwoTierIndexBuilder {
     quality_dimension: Option<usize>,
     fast_records: Vec<(String, Vec<f32>)>,
     quality_records: Vec<(String, Vec<f32>)>,
+    fast_ids: std::collections::HashSet<String>,
+    quality_ids: std::collections::HashSet<String>,
 }
 
 impl TwoTierIndexBuilder {
@@ -610,6 +612,8 @@ impl TwoTierIndexBuilder {
             quality_dimension: None,
             fast_records: Vec::new(),
             quality_records: Vec::new(),
+            fast_ids: std::collections::HashSet::new(),
+            quality_ids: std::collections::HashSet::new(),
         }
     }
 
@@ -645,7 +649,7 @@ impl TwoTierIndexBuilder {
             });
         }
         let doc_id = doc_id.into();
-        if self.fast_records.iter().any(|(id, _)| id == &doc_id) {
+        if !self.fast_ids.insert(doc_id.clone()) {
             return Err(SearchError::InvalidConfig {
                 field: "doc_id".to_owned(),
                 value: doc_id,
@@ -677,7 +681,7 @@ impl TwoTierIndexBuilder {
             });
         }
         let doc_id = doc_id.into();
-        if self.quality_records.iter().any(|(id, _)| id == &doc_id) {
+        if !self.quality_ids.insert(doc_id.clone()) {
             return Err(SearchError::InvalidConfig {
                 field: "doc_id".to_owned(),
                 value: doc_id,
