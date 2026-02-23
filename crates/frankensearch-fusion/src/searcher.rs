@@ -497,13 +497,14 @@ impl TwoTierSearcher {
 
         let initial_hits = initial_results.clone();
         let initial_latency = phase1_start.elapsed();
+        let display_hits: Vec<_> = initial_hits.iter().take(k).cloned().collect();
 
         if let Some(root_request_id) = telemetry_root_request_id.as_deref() {
             telemetry_initial_event_id = self.emit_search_telemetry(
                 semantic_query,
                 query_class,
                 SearchEventPhase::Initial,
-                initial_hits.len(),
+                display_hits.len(),
                 metrics.lexical_candidates,
                 metrics.semantic_candidates,
                 initial_latency,
@@ -523,7 +524,7 @@ impl TwoTierSearcher {
         }
 
         on_phase(SearchPhase::Initial {
-            results: initial_results,
+            results: display_hits.clone(),
             latency: initial_latency,
             metrics: PhaseMetrics {
                 embedder_id: self.fast_embedder.id().to_owned(),
@@ -532,7 +533,7 @@ impl TwoTierSearcher {
                 fused_count: initial_hits.len(),
             },
         });
-        self.export_search_metrics(query_class, &metrics, initial_hits.len(), false);
+        self.export_search_metrics(query_class, &metrics, display_hits.len(), false);
 
         // Phase 2: Quality refinement (optional).
         // Runs even if Phase 1 was lexical-only (fast_score is None), effectively
@@ -617,7 +618,7 @@ impl TwoTierSearcher {
                         );
                     }
                     on_phase(SearchPhase::RefinementFailed {
-                        initial_results: initial_hits,
+                        initial_results: display_hits.clone(),
                         error: timeout_error,
                         latency: phase2_latency,
                     });
@@ -725,7 +726,7 @@ impl TwoTierSearcher {
                             );
                         }
                         on_phase(SearchPhase::RefinementFailed {
-                            initial_results: initial_hits,
+                            initial_results: display_hits.clone(),
                             error: err,
                             latency: phase2_latency,
                         });
@@ -940,7 +941,7 @@ impl TwoTierSearcher {
                             || {
                                 vector_hits_to_scored_results(
                                     &fast_hits,
-                                    k,
+                                    base_candidates,
                                     &self.config,
                                     self.fast_embedder.id(),
                                 )
@@ -951,7 +952,7 @@ impl TwoTierSearcher {
                                     &fast_hits,
                                     graph,
                                     self.config.graph_ranking_weight,
-                                    k,
+                                    base_candidates,
                                     0,
                                     &rrf_config,
                                 );
@@ -967,14 +968,14 @@ impl TwoTierSearcher {
                     },
                     |lexical| {
                         let fused = graph_candidates.as_ref().map_or_else(
-                            || rrf_fuse(lexical, &fast_hits, k, 0, &rrf_config),
+                            || rrf_fuse(lexical, &fast_hits, base_candidates, 0, &rrf_config),
                             |graph| {
                                 rrf_fuse_with_graph(
                                     lexical,
                                     &fast_hits,
                                     graph,
                                     self.config.graph_ranking_weight,
-                                    k,
+                                    base_candidates,
                                     0,
                                     &rrf_config,
                                 )
