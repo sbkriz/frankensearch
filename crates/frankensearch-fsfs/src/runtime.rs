@@ -8184,8 +8184,15 @@ impl FsfsRuntime {
 
         let configured_root = PathBuf::from(&self.config.indexing.model_dir);
         let stack = EmbedderStack::auto_detect_with(Some(&configured_root))
-            .or_else(|_| EmbedderStack::auto_detect())?;
-        Ok(stack.fast_arc())
+            .or_else(|_| EmbedderStack::auto_detect());
+
+        #[cfg(not(feature = "embedded-models"))]
+        let stack = stack.map_err(|err| {
+            emit_lite_build_model_hint(&configured_root);
+            err
+        });
+
+        Ok(stack?.fast_arc())
     }
 
     fn resolve_quality_embedder(&self) -> SearchResult<Option<Arc<dyn Embedder>>> {
@@ -8195,8 +8202,15 @@ impl FsfsRuntime {
 
         let configured_root = PathBuf::from(&self.config.indexing.model_dir);
         let stack = EmbedderStack::auto_detect_with(Some(&configured_root))
-            .or_else(|_| EmbedderStack::auto_detect())?;
-        Ok(stack.quality_arc())
+            .or_else(|_| EmbedderStack::auto_detect());
+
+        #[cfg(not(feature = "embedded-models"))]
+        let stack = stack.map_err(|err| {
+            emit_lite_build_model_hint(&configured_root);
+            err
+        });
+
+        Ok(stack?.quality_arc())
     }
 
     fn prepare_search_execution_resources(
@@ -14028,6 +14042,41 @@ fn write_indexing_checkpoint(index_root: &Path, checkpoint: &IndexingCheckpoint)
 fn remove_indexing_checkpoint(index_root: &Path) {
     let path = index_root.join(FSFS_CHECKPOINT_FILE);
     let _ = fs::remove_file(path);
+}
+
+/// Emit a helpful hint when model detection fails in a lite build
+/// (one compiled without embedded models via `--no-default-features`).
+///
+/// This guides the user to either download models or switch to the
+/// standard build that bundles them.
+#[cfg(not(feature = "embedded-models"))]
+fn emit_lite_build_model_hint(model_root: &Path) {
+    let default_root = dirs::home_dir()
+        .map(|h| h.join(".local").join("share").join("frankensearch").join("models"))
+        .unwrap_or_else(|| PathBuf::from("~/.local/share/frankensearch/models"));
+    eprintln!();
+    eprintln!("--- fsfs lite build: no embedded models ---");
+    eprintln!();
+    eprintln!(
+        "This binary was built without bundled ML models (--no-default-features)."
+    );
+    eprintln!(
+        "Semantic search requires model files on disk. Looked in:"
+    );
+    eprintln!("  1. {}", model_root.display());
+    if model_root != default_root {
+        eprintln!("  2. {}", default_root.display());
+    }
+    eprintln!();
+    eprintln!("To download the required models, run:");
+    eprintln!();
+    eprintln!("  fsfs download-models");
+    eprintln!();
+    eprintln!(
+        "Or set FRANKENSEARCH_MODEL_DIR to point to an existing model cache."
+    );
+    eprintln!("Until then, fsfs will fall back to hash-based embeddings (degraded quality).");
+    eprintln!();
 }
 
 #[cfg(test)]

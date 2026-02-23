@@ -15,8 +15,16 @@
 #   --easy-mode        Auto-update PATH in shell rc files
 #   --verify           Run self-test after install
 #   --from-source      Build from source instead of downloading binary
+#   --lite             Build lite variant (no embedded models, ~15MB binary)
 #   --quiet            Suppress non-error output
 #   --no-gum           Disable gum formatting even if available
+#
+# Lite build:
+#   The default build embeds ML models (~570MB) for zero-config semantic search.
+#   Use --lite (with --from-source) for a much smaller binary (~15MB) that loads
+#   models from ~/.local/share/frankensearch/models/ at runtime.
+#   Download models after install with: fsfs download-models
+#   Equivalent to: cargo build --release -p frankensearch-fsfs --no-default-features
 #
 set -euo pipefail
 umask 022
@@ -32,6 +40,7 @@ EASY=0
 QUIET=0
 VERIFY=0
 FROM_SOURCE=0
+LITE=0
 CHECKSUM="${CHECKSUM:-}"
 CHECKSUM_URL="${CHECKSUM_URL:-}"
 ARTIFACT_URL="${ARTIFACT_URL:-}"
@@ -176,6 +185,8 @@ Options:
   --easy-mode        Auto-update PATH in shell rc files
   --verify           Run self-test after install
   --from-source      Build from source instead of downloading binary
+  --lite             Build lite variant without embedded models (~15MB vs ~570MB)
+                     Implies --from-source. Run 'fsfs download-models' after install.
   --quiet            Suppress non-error output
   --no-gum           Disable gum formatting even if available
 EOFU
@@ -192,6 +203,7 @@ while [ $# -gt 0 ]; do
     --checksum) CHECKSUM="$2"; shift 2;;
     --checksum-url) CHECKSUM_URL="$2"; shift 2;;
     --from-source) FROM_SOURCE=1; shift;;
+    --lite) LITE=1; FROM_SOURCE=1; shift;;
     --quiet|-q) QUIET=1; shift;;
     --no-gum) NO_GUM=1; shift;;
     -h|--help) usage; exit 0;;
@@ -364,7 +376,12 @@ if [ "$FROM_SOURCE" -eq 1 ]; then
   else
     git clone --depth 1 "https://github.com/${OWNER}/${REPO}.git" "$TMP/src"
   fi
-  (cd "$TMP/src" && cargo build --release -p frankensearch-fsfs)
+  if [ "$LITE" -eq 1 ]; then
+    info "Building lite variant (no embedded models)"
+    (cd "$TMP/src" && cargo build --release -p frankensearch-fsfs --no-default-features)
+  else
+    (cd "$TMP/src" && cargo build --release -p frankensearch-fsfs)
+  fi
   BIN="$TMP/src/target/release/${BINARY_NAME}"
   [ -x "$BIN" ] || { err "Build failed"; exit 1; }
   if [ "$SYSTEM" -eq 1 ]; then
@@ -380,6 +397,10 @@ if [ "$FROM_SOURCE" -eq 1 ]; then
       exit 1
     fi
     ok "Self-test complete: $SELF_TEST_OUTPUT"
+  fi
+  if [ "$LITE" -eq 1 ]; then
+    info "Lite build: no ML models embedded. Download them with:"
+    info "  ${BINARY_NAME} download-models"
   fi
   ok "Done. Binary at: $DEST/${BINARY_NAME}"
   exit 0

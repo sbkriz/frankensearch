@@ -1646,4 +1646,28 @@ mod tests {
         assert!(input.query.is_none());
         assert!(!input.stream);
     }
+
+    #[test]
+    fn parse_expand_flag_for_search() {
+        let input = parse_cli_args(["search", "query", "--expand"]).unwrap();
+        assert_eq!(input.command, CliCommand::Search);
+        assert!(input.expand);
+        assert_eq!(input.query.as_deref(), Some("query"));
+    }
+
+    #[test]
+    fn parse_expand_off_by_default() {
+        let input = parse_cli_args(["search", "query"]).unwrap();
+        assert!(!input.expand);
+    }
+
+    #[test]
+    fn parse_expand_rejects_non_search_commands() {
+        let err = parse_cli_args(["status", "--expand"]).expect_err("must fail");
+        assert!(
+            err.to_string()
+                .contains("--expand is only valid for the search command"),
+            "unexpected error: {err}"
+        );
+    }
 }

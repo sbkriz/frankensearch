@@ -93,6 +93,9 @@ jobs:
       - name: cargo check
         run: cargo check --workspace --all-targets
 
+      - name: cargo check (fsfs lite -- no embedded models)
+        run: cargo check -p frankensearch-fsfs --no-default-features
+
       - name: cargo clippy
         run: cargo clippy --workspace --all-targets -- -D warnings
 
@@ -604,10 +607,144 @@ jobs:
           name: release-${{ matrix.target }}
           path: dist/*
 
+  release-build-lite:
+    name: Release build lite (${{ matrix.target }})
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: quality
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-musl
+            build_tool: zigbuild
+          - os: ubuntu-latest
+            target: aarch64-unknown-linux-musl
+            build_tool: zigbuild
+          - os: macos-latest
+            target: x86_64-apple-darwin
+            build_tool: cargo
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            build_tool: cargo
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install nightly toolchain
+        uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: rustfmt, clippy
+
+      - name: Prepare path dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          deps_dir="$(cd "$GITHUB_WORKSPACE/.." && pwd)"
+          asupersync_ref="15e6b6920fa0ad3e6d843ea55186eed754389ad2"
+          frankensqlite_ref="5c99eeb93d789c1309d5c46a540289369ff39535"
+          fast_cmaes_ref="17f633e2c24bdd0c358310949066e5922b9e17b5"
+
+          clone_or_update() {
+            local repo_url="$1"
+            local dest_path="$2"
+            local ref="$3"
+            if [[ -d "${dest_path}/.git" ]]; then
+              git -C "${dest_path}" fetch --depth 1 origin "${ref}"
+            else
+              git clone --no-checkout "${repo_url}" "${dest_path}"
+              git -C "${dest_path}" fetch --depth 1 origin "${ref}"
+            fi
+            git -C "${dest_path}" checkout --detach FETCH_HEAD
+          }
+
+          clone_or_update "https://github.com/Dicklesworthstone/asupersync.git" "${deps_dir}/asupersync" "${asupersync_ref}"
+          clone_or_update "https://github.com/Dicklesworthstone/frankensqlite.git" "${deps_dir}/frankensqlite" "${frankensqlite_ref}"
+          clone_or_update "https://github.com/Dicklesworthstone/fast_cmaes.git" "${deps_dir}/fast_cmaes" "${fast_cmaes_ref}"
+
+          find "$GITHUB_WORKSPACE" -name Cargo.toml -exec \
+            sed -i.bak -e "s|/data/projects/|${deps_dir}/|g" {} +
+          find "$GITHUB_WORKSPACE" -name '*.bak' -delete
+
+      - name: Cache cargo registry + target
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: release-lite-${{ matrix.target }}-nightly
+          cache-targets: true
+
+      - name: Setup Zig (Linux cross-musl builds)
+        if: matrix.build_tool == 'zigbuild'
+        uses: goto-bus-stop/setup-zig@v2
+        with:
+          version: 0.12.0
+
+      - name: Install cargo-zigbuild (Linux cross-musl builds)
+        if: matrix.build_tool == 'zigbuild'
+        run: cargo install cargo-zigbuild --locked
+
+      - name: Add Rust target
+        run: rustup target add ${{ matrix.target }}
+
+      - name: Build fsfs-lite release binary (no embedded models)
+        shell: bash
+        run: |
+          set -euo pipefail
+          target="${{ matrix.target }}"
+          if [[ "${{ matrix.build_tool }}" == "zigbuild" ]]; then
+            cargo zigbuild -p frankensearch-fsfs --release --target "${target}" --no-default-features
+          else
+            cargo build -p frankensearch-fsfs --release --target "${target}" --no-default-features
+          fi
+
+      - name: Package lite archive + checksum
+        shell: bash
+        env:
+          TAG_NAME: ${{ github.ref_name }}
+          TARGET_TRIPLE: ${{ matrix.target }}
+        run: |
+          set -euo pipefail
+          binary_name="fsfs"
+          archive_extension="tar.xz"
+
+          binary_path="target/${TARGET_TRIPLE}/release/${binary_name}"
+          if [[ ! -f "${binary_path}" ]]; then
+            echo "Expected binary not found: ${binary_path}" >&2
+            exit 1
+          fi
+
+          if command -v llvm-strip >/dev/null 2>&1; then
+            llvm-strip "${binary_path}" || true
+          elif command -v strip >/dev/null 2>&1; then
+            strip "${binary_path}" || true
+          fi
+
+          version_bare="${TAG_NAME#v}"
+          archive_base="fsfs-lite-${version_bare}-${TARGET_TRIPLE}"
+          mkdir -p dist
+          cp "${binary_path}" "dist/${binary_name}"
+          tar -C dist -cJf "dist/${archive_base}.tar.xz" "${binary_name}"
+          archive_path="dist/${archive_base}.${archive_extension}"
+          if command -v sha256sum >/dev/null 2>&1; then
+            sha256sum "${archive_path}" > "${archive_path}.sha256"
+          else
+            shasum -a 256 "${archive_path}" > "${archive_path}.sha256"
+          fi
+          rm -f "dist/${binary_name}"
+
+      - name: Upload lite release artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-lite-${{ matrix.target }}
+          path: dist/*
+
   release-publish:
     name: Publish GitHub Release
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: release-build
+    needs: [release-build, release-build-lite]
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:

@@ -24,6 +24,51 @@ pub use batch_coalescer::{
 };
 #[cfg(feature = "bundled-default-models")]
 pub use bundled_default_models::{EmbeddedModelInstallSummary, ensure_default_semantic_models};
+
+// When bundled-default-models is disabled (lite build), provide a no-op
+// `ensure_default_semantic_models` so downstream crates compile without
+// feature-gating every call site.
+#[cfg(not(feature = "bundled-default-models"))]
+pub use lite_fallback::{EmbeddedModelInstallSummary, ensure_default_semantic_models};
+
+#[cfg(not(feature = "bundled-default-models"))]
+mod lite_fallback {
+    use std::path::{Path, PathBuf};
+
+    use frankensearch_core::error::SearchResult;
+
+    /// Summary returned by the no-op lite-build materialization.
+    #[derive(Debug, Clone, PartialEq, Eq)]
+    pub struct EmbeddedModelInstallSummary {
+        /// Effective model root (inherited from caller or platform default).
+        pub model_root: PathBuf,
+        /// Always 0 in the lite build -- no embedded models to write.
+        pub models_written: usize,
+        /// Always 0 in the lite build.
+        pub bytes_written: u64,
+    }
+
+    /// No-op: lite builds have no embedded models to materialize.
+    ///
+    /// Returns a summary with zero writes. Callers should check for models
+    /// on disk at the standard location (`~/.local/share/frankensearch/models/`)
+    /// and prompt the user to run `fsfs download-models` if they are missing.
+    pub fn ensure_default_semantic_models(
+        model_root: Option<&Path>,
+    ) -> SearchResult<EmbeddedModelInstallSummary> {
+        let root = model_root
+            .map(|p| p.to_path_buf())
+            .unwrap_or_else(|| {
+                crate::model_registry::ensure_model_storage_layout_checked()
+                    .unwrap_or_else(|_| PathBuf::from("models"))
+            });
+        Ok(EmbeddedModelInstallSummary {
+            model_root: root,
+            models_written: 0,
+            bytes_written: 0,
+        })
+    }
+}
 pub use cached_embedder::{CacheStats, CachedEmbedder};
 pub use model_cache::{
     ENV_DATA_DIR, ENV_MODEL_DIR, KnownModel, MODEL_CACHE_LAYOUT_VERSION, ModelCacheLayout,
