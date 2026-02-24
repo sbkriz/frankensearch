@@ -240,14 +240,14 @@ impl TwoTierSearcher {
 
     /// Enable sequential-testing phase gating for automatic Phase-2 skipping.
     #[must_use]
-    pub const fn with_phase_gate(mut self, phase_gate: PhaseGate) -> Self {
+    pub fn with_phase_gate(mut self, phase_gate: PhaseGate) -> Self {
         self.phase_gate = Some(Mutex::new(phase_gate));
         self
     }
 
     /// Configure phase gating directly from a gate config.
     #[must_use]
-    pub const fn with_phase_gate_config(self, config: PhaseGateConfig) -> Self {
+    pub fn with_phase_gate_config(self, config: PhaseGateConfig) -> Self {
         self.with_phase_gate(PhaseGate::new(config))
     }
 
