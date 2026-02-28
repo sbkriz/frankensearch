@@ -36,8 +36,14 @@ pub trait ApiProvider: Send + Sync + fmt::Debug {
     /// Whether this model supports Matryoshka Representation Learning.
     fn supports_mrl(&self) -> bool;
 
-    /// Full endpoint URL for the embedding request.
+    /// Base endpoint URL for the embedding request.
     fn endpoint_url(&self) -> &str;
+
+    /// Full request URL (may include query parameters like API keys).
+    /// Defaults to `endpoint_url()`.
+    fn request_url(&self) -> String {
+        self.endpoint_url().to_owned()
+    }
 
     /// HTTP headers (excluding content-type which is always application/json).
     fn request_headers(&self) -> Vec<(String, String)>;
@@ -276,9 +282,11 @@ impl ApiProvider for GeminiProvider {
     }
 
     fn endpoint_url(&self) -> &str {
-        // Placeholder — actual URL is constructed dynamically with the model name
-        // and API key as a query parameter. See `request_headers()`.
         "https://generativelanguage.googleapis.com"
+    }
+
+    fn request_url(&self) -> String {
+        self.batch_embed_url()
     }
 
     fn request_headers(&self) -> Vec<(String, String)> {
