@@ -269,7 +269,10 @@ pub use frankensearch_embed::model_registry::{EmbedderRegistry, RegisteredEmbedd
 
 // ─── Vector index (always available) ────────────────────────────────────────
 
-pub use frankensearch_index::{TwoTierIndex, TwoTierIndexBuilder, VectorIndex, VectorIndexWriter};
+pub use frankensearch_index::{
+    InMemoryTwoTierIndex, InMemoryVectorIndex, TwoTierIndex, TwoTierIndexBuilder, VectorIndex,
+    VectorIndexWriter,
+};
 
 #[cfg(feature = "ann")]
 pub use frankensearch_index::{AnnSearchStats, HnswConfig, HnswIndex};
@@ -278,8 +281,8 @@ pub use frankensearch_index::{AnnSearchStats, HnswConfig, HnswIndex};
 
 pub use frankensearch_fusion::{
     DaemonFallbackEmbedder, DaemonFallbackReranker, FederatedConfig, FederatedFusion, FederatedHit,
-    FederatedSearcher, NoopDaemonClient, RrfConfig, TwoTierSearcher, blend_two_tier,
-    candidate_count, rrf_fuse,
+    FederatedSearcher, NoopDaemonClient, RrfConfig, SyncLexicalSearch, SyncSearchIterator,
+    SyncTwoTierSearcher, TwoTierSearcher, blend_two_tier, candidate_count, rrf_fuse,
 };
 
 #[cfg(feature = "graph")]
@@ -326,8 +329,8 @@ pub mod prelude {
 
     pub use crate::{
         DocumentFingerprint, Embedder, FederatedConfig, FederatedSearcher, LexicalSearch, Reranker,
-        ScoreSource, ScoredResult, SearchError, SearchPhase, SearchResult, TwoTierConfig,
-        TwoTierMetrics, TwoTierSearcher,
+        ScoreSource, ScoredResult, SearchError, SearchPhase, SearchResult, SyncTwoTierSearcher,
+        TwoTierConfig, TwoTierMetrics, TwoTierSearcher,
     };
 
     #[cfg(feature = "storage")]

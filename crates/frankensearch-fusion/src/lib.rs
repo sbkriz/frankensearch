@@ -33,6 +33,7 @@ pub mod queue;
 pub mod refresh;
 pub mod rrf;
 pub mod searcher;
+pub mod sync_searcher;
 
 pub use adaptive::{
     AdaptiveConfig, AdaptiveFusion, AdaptiveSnapshot, BlendPosterior, EvidenceEvent, KPosterior,
@@ -88,3 +89,4 @@ pub use queue::{
 pub use refresh::{RefreshMetrics, RefreshMetricsSnapshot, RefreshWorker, RefreshWorkerConfig};
 pub use rrf::{RrfConfig, candidate_count, rrf_fuse, rrf_fuse_with_graph};
 pub use searcher::TwoTierSearcher;
+pub use sync_searcher::{SyncLexicalSearch, SyncSearchIterator, SyncTwoTierSearcher};

@@ -44,6 +44,7 @@
 
 #[cfg(feature = "ann")]
 pub mod hnsw;
+pub mod in_memory;
 pub mod mrl;
 pub mod quantization;
 mod repro_soft_delete_rollback;
@@ -70,6 +71,7 @@ pub use hnsw::{
     AnnSearchStats, HNSW_DEFAULT_EF_CONSTRUCTION, HNSW_DEFAULT_EF_SEARCH, HNSW_DEFAULT_M,
     HNSW_DEFAULT_MAX_LAYER, HnswConfig, HnswIndex,
 };
+pub use in_memory::{InMemoryTwoTierIndex, InMemoryVectorIndex};
 pub use mrl::{MrlConfig, MrlSearchStats};
 pub use quantization::ScalarQuantizer;
 pub use search::{PARALLEL_CHUNK_SIZE, PARALLEL_THRESHOLD, SearchParams};

@@ -28,9 +28,9 @@ use frankensearch_core::{SearchError, SearchResult, VectorHit};
 use half::f16;
 use rayon::prelude::*;
 
-use crate::simd::dot_product_f16_f32;
-use crate::search::{PARALLEL_CHUNK_SIZE, PARALLEL_THRESHOLD, SearchParams};
 use crate::VectorIndex;
+use crate::search::SearchParams;
+use crate::simd::dot_product_f16_f32;
 
 /// Fully-resident in-memory vector index with f16 quantization.
 ///
@@ -67,7 +67,7 @@ impl InMemoryVectorIndex {
         }
         let count = doc_ids.len();
         let mut flat = Vec::with_capacity(count * dimension);
-        for (i, vec) in vectors.iter().enumerate() {
+        for (i, vec) in vectors.into_iter().enumerate() {
             if vec.len() != dimension {
                 return Err(SearchError::DimensionMismatch {
                     expected: dimension,
@@ -75,7 +75,7 @@ impl InMemoryVectorIndex {
                 });
             }
             // Validate finite values
-            for &val in vec {
+            for val in &vec {
                 if !val.is_finite() {
                     return Err(SearchError::InvalidConfig {
                         field: "vectors".to_owned(),
@@ -84,7 +84,7 @@ impl InMemoryVectorIndex {
                     });
                 }
             }
-            flat.extend(vec.iter().map(|&v| f16::from_f32(v)));
+            flat.extend(vec.into_iter().map(f16::from_f32));
         }
         Ok(Self {
             doc_ids,
@@ -126,13 +126,13 @@ impl InMemoryVectorIndex {
 
     /// Number of vectors in the index.
     #[must_use]
-    pub fn record_count(&self) -> usize {
+    pub const fn record_count(&self) -> usize {
         self.doc_ids.len()
     }
 
     /// Vector dimensionality.
     #[must_use]
-    pub fn dimension(&self) -> usize {
+    pub const fn dimension(&self) -> usize {
         self.dimension
     }
 
@@ -201,8 +201,7 @@ impl InMemoryVectorIndex {
             return Ok(Vec::new());
         }
 
-        let use_parallel =
-            params.parallel_enabled && count >= params.parallel_threshold;
+        let use_parallel = params.parallel_enabled && count >= params.parallel_threshold;
         let chunk_size = params.parallel_chunk_size.max(1);
 
         let heap = if use_parallel {
@@ -257,19 +256,19 @@ impl InMemoryVectorIndex {
         let mut cutoff = f32::NEG_INFINITY;
 
         for index in start..end {
-            if let Some(f) = filter {
-                if !f.matches(&self.doc_ids[index], None) {
-                    continue;
-                }
+            if let Some(f) = filter
+                && !f.matches(&self.doc_ids[index], None)
+            {
+                continue;
             }
             let stored = self.vector_slice(index);
             let score = dot_product_f16_f32(stored, query)?;
             if heap.len() < limit || score_key(score) >= cutoff {
                 insert_candidate(&mut heap, HeapEntry::new(index, score), limit);
-                if heap.len() >= limit {
-                    if let Some(&worst) = heap.peek() {
-                        cutoff = score_key(worst.score);
-                    }
+                if heap.len() >= limit
+                    && let Some(&worst) = heap.peek()
+                {
+                    cutoff = score_key(worst.score);
                 }
             }
         }
@@ -328,11 +327,11 @@ impl InMemoryVectorIndex {
     /// Compute dot products between a query and specific hit positions.
     ///
     /// Used for quality scoring when this index serves as the quality tier.
-    pub fn scores_for_hits(
-        &self,
-        query: &[f32],
-        hits: &[VectorHit],
-    ) -> SearchResult<Vec<f32>> {
+    ///
+    /// # Errors
+    ///
+    /// Returns `SearchError::DimensionMismatch` when `query.len() != dimension`.
+    pub fn scores_for_hits(&self, query: &[f32], hits: &[VectorHit]) -> SearchResult<Vec<f32>> {
         if query.len() != self.dimension {
             return Err(SearchError::DimensionMismatch {
                 expected: self.dimension,
@@ -370,7 +369,8 @@ pub struct InMemoryTwoTierIndex {
 
 impl InMemoryTwoTierIndex {
     /// Create from two pre-built in-memory indices.
-    pub fn new(
+    #[must_use]
+    pub const fn new(
         fast_index: InMemoryVectorIndex,
         quality_index: Option<InMemoryVectorIndex>,
     ) -> Self {
@@ -395,9 +395,7 @@ impl InMemoryTwoTierIndex {
         } else {
             let fallback = dir.join(crate::two_tier::VECTOR_INDEX_FALLBACK_FILENAME);
             if !fallback.exists() {
-                return Err(SearchError::IndexNotFound {
-                    path: fast_path,
-                });
+                return Err(SearchError::IndexNotFound { path: fast_path });
             }
             fallback
         };
@@ -479,13 +477,13 @@ impl InMemoryTwoTierIndex {
 
     /// Get a reference to the fast index.
     #[must_use]
-    pub fn fast_index(&self) -> &InMemoryVectorIndex {
+    pub const fn fast_index(&self) -> &InMemoryVectorIndex {
         &self.fast_index
     }
 
     /// Get a reference to the quality index (if present).
     #[must_use]
-    pub fn quality_index(&self) -> Option<&InMemoryVectorIndex> {
+    pub const fn quality_index(&self) -> Option<&InMemoryVectorIndex> {
         self.quality_index.as_ref()
     }
 }
@@ -552,15 +550,15 @@ fn insert_candidate(heap: &mut BinaryHeap<HeapEntry>, candidate: HeapEntry, limi
         heap.push(candidate);
         return;
     }
-    if let Some(&worst) = heap.peek() {
-        if match score_key(candidate.score).total_cmp(&score_key(worst.score)) {
+    if let Some(&worst) = heap.peek()
+        && match score_key(candidate.score).total_cmp(&score_key(worst.score)) {
             Ordering::Greater => true,
             Ordering::Less => false,
             Ordering::Equal => candidate.index < worst.index,
-        } {
-            let _ = heap.pop();
-            heap.push(candidate);
         }
+    {
+        let _ = heap.pop();
+        heap.push(candidate);
     }
 }
 
@@ -586,7 +584,31 @@ fn merge_partial_heaps(
 
 #[cfg(test)]
 mod tests {
+    #![allow(
+        clippy::cast_precision_loss,
+        clippy::items_after_statements,
+        clippy::redundant_clone,
+        clippy::suboptimal_flops,
+        clippy::unnecessary_literal_bound
+    )]
+
     use super::*;
+    use crate::Quantization;
+    use std::path::{Path, PathBuf};
+    use std::sync::atomic::{AtomicU64, Ordering as AtomicOrdering};
+
+    fn temp_index_path(name: &str) -> PathBuf {
+        static COUNTER: AtomicU64 = AtomicU64::new(0);
+        let nonce = COUNTER.fetch_add(1, AtomicOrdering::Relaxed);
+        let dir = std::env::temp_dir().join("frankensearch_in_memory_tests");
+        std::fs::create_dir_all(&dir).expect("create temp dir");
+        dir.join(format!("{name}-{nonce}.fsvi"))
+    }
+
+    fn cleanup(path: &Path) {
+        let _ = std::fs::remove_file(path);
+        let _ = std::fs::remove_file(path.with_extension("fsvi.wal"));
+    }
 
     fn make_normalized_vec(dim: usize, seed: f32) -> Vec<f32> {
         let mut v: Vec<f32> = (0..dim).map(|i| (seed + i as f32 * 0.1).sin()).collect();
@@ -640,6 +662,56 @@ mod tests {
     }
 
     #[test]
+    fn from_fsvi_matches_file_backed_search() {
+        let path = temp_index_path("from_fsvi");
+        cleanup(&path);
+
+        let dim = 32;
+        let docs = 64usize;
+        let mut writer = crate::VectorIndex::create_with_revision(
+            &path,
+            "test-embedder",
+            "rev-a",
+            dim,
+            Quantization::F16,
+        )
+        .unwrap();
+
+        for i in 0..docs {
+            let vector = make_normalized_vec(dim, i as f32 * 0.73);
+            writer.write_record(&format!("doc-{i}"), &vector).unwrap();
+        }
+        writer.finish().unwrap();
+
+        let file_index = crate::VectorIndex::open(&path).unwrap();
+        let memory_index = InMemoryVectorIndex::from_fsvi(&path).unwrap();
+        assert_eq!(memory_index.record_count(), docs);
+        assert_eq!(memory_index.dimension(), dim);
+
+        let query = make_normalized_vec(dim, 12.4);
+        let file_hits = file_index.search_top_k(&query, 10, None).unwrap();
+        let memory_hits = memory_index.search_top_k(&query, 10, None).unwrap();
+        assert_eq!(file_hits.len(), memory_hits.len());
+
+        for (file, memory) in file_hits.iter().zip(memory_hits.iter()) {
+            assert_eq!(file.doc_id, memory.doc_id);
+            assert!(
+                (file.score - memory.score).abs() < 0.001,
+                "score mismatch for {}: file={} memory={}",
+                file.doc_id,
+                file.score,
+                memory.score
+            );
+        }
+
+        // Verify vectors were loaded in quantized form and still round-trip.
+        let recovered = memory_index.vector_at_f32(0).unwrap();
+        assert_eq!(recovered.len(), dim);
+
+        cleanup(&path);
+    }
+
+    #[test]
     fn search_top_k_correctness() {
         let dim = 16;
         let n = 50;
@@ -649,8 +721,7 @@ mod tests {
             .collect();
         let query = make_normalized_vec(dim, 0.7); // should match doc-1 best
 
-        let index =
-            InMemoryVectorIndex::from_vectors(doc_ids, vectors.clone(), dim).unwrap();
+        let index = InMemoryVectorIndex::from_vectors(doc_ids, vectors, dim).unwrap();
         let hits = index.search_top_k(&query, 5, None).unwrap();
 
         assert_eq!(hits.len(), 5);
@@ -696,8 +767,7 @@ mod tests {
 
     #[test]
     fn search_empty_index() {
-        let index =
-            InMemoryVectorIndex::from_vectors(Vec::new(), Vec::new(), 4).unwrap();
+        let index = InMemoryVectorIndex::from_vectors(Vec::new(), Vec::new(), 4).unwrap();
         let hits = index.search_top_k(&[0.0, 0.0, 0.0, 0.0], 10, None).unwrap();
         assert!(hits.is_empty());
     }
@@ -718,12 +788,8 @@ mod tests {
     fn f16_precision_tolerance() {
         let dim = 256;
         let v = make_normalized_vec(dim, 42.0);
-        let index = InMemoryVectorIndex::from_vectors(
-            vec!["test".into()],
-            vec![v.clone()],
-            dim,
-        )
-        .unwrap();
+        let index =
+            InMemoryVectorIndex::from_vectors(vec!["test".into()], vec![v.clone()], dim).unwrap();
 
         // Self-similarity should be ~1.0 (within f16 precision)
         let hits = index.search_top_k(&v, 1, None).unwrap();
@@ -739,19 +805,13 @@ mod tests {
     fn vector_at_f32_roundtrip() {
         let dim = 8;
         let original = make_normalized_vec(dim, 5.0);
-        let index = InMemoryVectorIndex::from_vectors(
-            vec!["a".into()],
-            vec![original.clone()],
-            dim,
-        )
-        .unwrap();
+        let index =
+            InMemoryVectorIndex::from_vectors(vec!["a".into()], vec![original.clone()], dim)
+                .unwrap();
         let recovered = index.vector_at_f32(0).unwrap();
         assert_eq!(recovered.len(), dim);
         for (orig, rec) in original.iter().zip(recovered.iter()) {
-            assert!(
-                (orig - rec).abs() < 0.002,
-                "f16 round-trip error too large"
-            );
+            assert!((orig - rec).abs() < 0.002, "f16 round-trip error too large");
         }
     }
 
@@ -760,13 +820,10 @@ mod tests {
         let dim = 8;
         let n = 20;
         let doc_ids: Vec<String> = (0..n).map(|i| format!("doc-{i}")).collect();
-        let vectors: Vec<Vec<f32>> = (0..n)
-            .map(|i| make_normalized_vec(dim, i as f32))
-            .collect();
+        let vectors: Vec<Vec<f32>> = (0..n).map(|i| make_normalized_vec(dim, i as f32)).collect();
         let query = make_normalized_vec(dim, 5.0);
 
-        let fast =
-            InMemoryVectorIndex::from_vectors(doc_ids, vectors, dim).unwrap();
+        let fast = InMemoryVectorIndex::from_vectors(doc_ids, vectors, dim).unwrap();
         let two_tier = InMemoryTwoTierIndex::new(fast, None);
 
         assert!(!two_tier.has_quality_index());
@@ -791,18 +848,9 @@ mod tests {
             .map(|i| make_normalized_vec(dim_quality, i as f32 * 0.5))
             .collect();
 
-        let fast = InMemoryVectorIndex::from_vectors(
-            doc_ids.clone(),
-            fast_vecs,
-            dim_fast,
-        )
-        .unwrap();
-        let quality = InMemoryVectorIndex::from_vectors(
-            doc_ids,
-            quality_vecs,
-            dim_quality,
-        )
-        .unwrap();
+        let fast = InMemoryVectorIndex::from_vectors(doc_ids.clone(), fast_vecs, dim_fast).unwrap();
+        let quality =
+            InMemoryVectorIndex::from_vectors(doc_ids, quality_vecs, dim_quality).unwrap();
 
         let two_tier = InMemoryTwoTierIndex::new(fast, Some(quality));
         assert!(two_tier.has_quality_index());
@@ -811,7 +859,9 @@ mod tests {
         let hits = two_tier.search_fast(&fast_query, 5).unwrap();
 
         let quality_query = make_normalized_vec(dim_quality, 1.5);
-        let scores = two_tier.quality_scores_for_hits(&quality_query, &hits).unwrap();
+        let scores = two_tier
+            .quality_scores_for_hits(&quality_query, &hits)
+            .unwrap();
         assert_eq!(scores.len(), 5);
         // All scores should be finite
         for &s in &scores {
@@ -830,7 +880,9 @@ mod tests {
         .unwrap();
         let two_tier = InMemoryTwoTierIndex::new(fast, None);
 
-        let hits = two_tier.search_fast(&make_normalized_vec(dim, 1.0), 1).unwrap();
+        let hits = two_tier
+            .search_fast(&make_normalized_vec(dim, 1.0), 1)
+            .unwrap();
         let scores = two_tier
             .quality_scores_for_hits(&make_normalized_vec(dim, 1.0), &hits)
             .unwrap();
@@ -847,8 +899,7 @@ mod tests {
             .collect();
         let query = make_normalized_vec(dim, 7.0);
 
-        let index =
-            InMemoryVectorIndex::from_vectors(doc_ids, vectors, dim).unwrap();
+        let index = InMemoryVectorIndex::from_vectors(doc_ids, vectors, dim).unwrap();
 
         let seq_params = SearchParams {
             parallel_enabled: false,
