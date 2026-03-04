@@ -6748,9 +6748,7 @@ impl FsfsRuntime {
         let vector_path = index_root.join(FSFS_VECTOR_INDEX_FILE);
 
         if !vector_path.exists() {
-            return Err(SearchError::IndexNotFound {
-                path: vector_path,
-            });
+            return Err(SearchError::IndexNotFound { path: vector_path });
         }
 
         let embedder = self.resolve_fast_embedder()?;
@@ -6758,12 +6756,11 @@ impl FsfsRuntime {
 
         // Read input lines from --file or stdin.
         let lines: Vec<String> = if let Some(ref file_path) = self.cli_input.input_file {
-            let content = fs::read_to_string(file_path).map_err(|source| {
-                SearchError::SubsystemError {
+            let content =
+                fs::read_to_string(file_path).map_err(|source| SearchError::SubsystemError {
                     subsystem: "fsfs.append_batch.read_file",
                     source: Box::new(source),
-                }
-            })?;
+                })?;
             content.lines().map(str::to_owned).collect()
         } else {
             let stdin = std::io::stdin();
@@ -6828,15 +6825,17 @@ impl FsfsRuntime {
         // Batch-embed all texts.
         let mut entries: Vec<(String, Vec<f32>)> = Vec::with_capacity(docs.len());
         for (id, text) in &docs {
-            let embedding = embedder.embed(cx, text).await.map_err(|source| {
-                SearchError::SubsystemError {
-                    subsystem: "fsfs.append_batch.embed",
-                    source: Box::new(std::io::Error::other(format!(
-                        "failed to embed doc '{}': {source}",
-                        id
-                    ))),
-                }
-            })?;
+            let embedding =
+                embedder
+                    .embed(cx, text)
+                    .await
+                    .map_err(|source| SearchError::SubsystemError {
+                        subsystem: "fsfs.append_batch.embed",
+                        source: Box::new(std::io::Error::other(format!(
+                            "failed to embed doc '{}': {source}",
+                            id
+                        ))),
+                    })?;
             if embedding.len() != dimension {
                 return Err(SearchError::DimensionMismatch {
                     expected: dimension,
@@ -6861,7 +6860,10 @@ impl FsfsRuntime {
         if self.cli_input.format == OutputFormat::Table {
             println!("{count} documents appended to WAL");
             if index.needs_compaction() {
-                println!("hint: WAL has {} entries; consider running 'fsfs compact'", index.wal_record_count());
+                println!(
+                    "hint: WAL has {} entries; consider running 'fsfs compact'",
+                    index.wal_record_count()
+                );
             }
         } else {
             let payload = serde_json::json!({
@@ -6895,9 +6897,7 @@ impl FsfsRuntime {
         let vector_path = index_root.join(FSFS_VECTOR_INDEX_FILE);
 
         if !vector_path.exists() {
-            return Err(SearchError::IndexNotFound {
-                path: vector_path,
-            });
+            return Err(SearchError::IndexNotFound { path: vector_path });
         }
 
         let mut index = VectorIndex::open(&vector_path)?;
@@ -6991,9 +6991,7 @@ impl FsfsRuntime {
         let vector_path = index_root.join(FSFS_VECTOR_INDEX_FILE);
 
         if !vector_path.exists() {
-            return Err(SearchError::IndexNotFound {
-                path: vector_path,
-            });
+            return Err(SearchError::IndexNotFound { path: vector_path });
         }
 
         let mut index = VectorIndex::open(&vector_path)?;
@@ -7088,10 +7086,7 @@ impl FsfsRuntime {
             );
         }
 
-        let mut last_wal_len: u64 = wal_sidecar
-            .metadata()
-            .map(|m| m.len())
-            .unwrap_or(0);
+        let mut last_wal_len: u64 = wal_sidecar.metadata().map(|m| m.len()).unwrap_or(0);
 
         let shutdown = Arc::new(ShutdownCoordinator::new());
         shutdown.register_signals()?;
@@ -7107,10 +7102,7 @@ impl FsfsRuntime {
             }
 
             // Poll WAL file size.
-            let current_wal_len = wal_sidecar
-                .metadata()
-                .map(|m| m.len())
-                .unwrap_or(0);
+            let current_wal_len = wal_sidecar.metadata().map(|m| m.len()).unwrap_or(0);
 
             if current_wal_len > last_wal_len {
                 info!(
@@ -7120,34 +7112,34 @@ impl FsfsRuntime {
                 );
 
                 if self.cli_input.format == OutputFormat::Table {
-                    println!("daemon: WAL changed ({last_wal_len} -> {current_wal_len} bytes), compacting...");
+                    println!(
+                        "daemon: WAL changed ({last_wal_len} -> {current_wal_len} bytes), compacting..."
+                    );
                 }
 
                 match VectorIndex::open(&vector_path) {
-                    Ok(mut index) => {
-                        match index.compact() {
-                            Ok(stats) => {
-                                info!(
-                                    wal_merged = stats.wal_records,
-                                    total_after = stats.total_records_after,
-                                    elapsed_ms = %format!("{:.1}", stats.elapsed_ms),
-                                    "daemon: compaction completed"
+                    Ok(mut index) => match index.compact() {
+                        Ok(stats) => {
+                            info!(
+                                wal_merged = stats.wal_records,
+                                total_after = stats.total_records_after,
+                                elapsed_ms = %format!("{:.1}", stats.elapsed_ms),
+                                "daemon: compaction completed"
+                            );
+                            if self.cli_input.format == OutputFormat::Table {
+                                println!(
+                                    "daemon: compacted {} WAL entries -> {} total records ({:.1}ms)",
+                                    stats.wal_records, stats.total_records_after, stats.elapsed_ms
                                 );
-                                if self.cli_input.format == OutputFormat::Table {
-                                    println!(
-                                        "daemon: compacted {} WAL entries -> {} total records ({:.1}ms)",
-                                        stats.wal_records, stats.total_records_after, stats.elapsed_ms
-                                    );
-                                }
-                            }
-                            Err(error) => {
-                                warn!(error = %error, "daemon: compaction failed");
-                                if self.cli_input.format == OutputFormat::Table {
-                                    eprintln!("daemon: compaction error: {error}");
-                                }
                             }
                         }
-                    }
+                        Err(error) => {
+                            warn!(error = %error, "daemon: compaction failed");
+                            if self.cli_input.format == OutputFormat::Table {
+                                eprintln!("daemon: compaction error: {error}");
+                            }
+                        }
+                    },
                     Err(error) => {
                         warn!(error = %error, "daemon: failed to open index for compaction");
                         if self.cli_input.format == OutputFormat::Table {
@@ -7157,10 +7149,7 @@ impl FsfsRuntime {
                 }
 
                 // Re-read the current WAL length after compaction (it should be gone or reset).
-                last_wal_len = wal_sidecar
-                    .metadata()
-                    .map(|m| m.len())
-                    .unwrap_or(0);
+                last_wal_len = wal_sidecar.metadata().map(|m| m.len()).unwrap_or(0);
             } else {
                 last_wal_len = current_wal_len;
             }
