@@ -30,7 +30,7 @@ pub use cass_compat::{
 // Re-export tantivy types that appear in frankensearch-lexical's public API.
 // Consumers can import these from `frankensearch::lexical::` instead of adding
 // a direct tantivy dependency.
-pub use tantivy::collector::TopDocs;
+pub use tantivy::collector::{Count, TopDocs};
 pub use tantivy::query::{BooleanQuery, Occur, Query, TermQuery};
 pub use tantivy::schema::{Field, IndexRecordOption, Schema, Value};
 pub use tantivy::{
@@ -178,6 +178,20 @@ pub struct LexicalDocHit {
     pub doc_address: DocAddress,
 }
 
+/// Paginated lexical search result containing both the matched hits and the
+/// total number of documents matching the query.
+///
+/// The `total_count` reflects **all** matching documents in the index, not just
+/// the page returned in `hits`. Clients can use this for pagination UI
+/// (e.g., `page 2 of ceil(total_count / page_size)`).
+#[derive(Debug, Clone, PartialEq)]
+pub struct LexicalSearchResult {
+    /// The paginated slice of matching documents.
+    pub hits: Vec<LexicalDocHit>,
+    /// Total number of documents matching the query across the entire index.
+    pub total_count: usize,
+}
+
 /// Lightweight lexical hit used by hot paths that only need `doc_id` + score.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct LexicalIdHit {
@@ -204,15 +218,18 @@ pub fn execute_query_with_offset(
     query: &dyn tantivy::query::Query,
     limit: usize,
     offset: usize,
-) -> SearchResult<Vec<LexicalDocHit>> {
-    let top_docs = searcher
-        .search(query, &TopDocs::with_limit(limit).and_offset(offset))
+) -> SearchResult<LexicalSearchResult> {
+    let (top_docs, total_count) = searcher
+        .search(
+            query,
+            &(TopDocs::with_limit(limit).and_offset(offset), Count),
+        )
         .map_err(|e| SearchError::SubsystemError {
             subsystem: "tantivy",
             source: Box::new(e),
         })?;
 
-    Ok(top_docs
+    let hits = top_docs
         .into_iter()
         .enumerate()
         .map(|(rank, (bm25_score, doc_address))| LexicalDocHit {
@@ -220,7 +237,9 @@ pub fn execute_query_with_offset(
             rank,
             doc_address,
         })
-        .collect())
+        .collect();
+
+    Ok(LexicalSearchResult { hits, total_count })
 }
 
 /// Load a stored Tantivy document by address.
@@ -595,18 +614,19 @@ impl TantivyIndex {
         let parsed = self.parse_query_lenient(query);
 
         let searcher = self.reader.searcher();
-        let top_docs = execute_query_with_offset(&searcher, &*parsed, limit, 0)?;
+        let search_result = execute_query_with_offset(&searcher, &*parsed, limit, 0)?;
         let snippet_gen =
             try_build_snippet_generator(&searcher, &*parsed, self.fields.content, snippet_config);
 
         debug!(
-            hits = top_docs.len(),
+            hits = search_result.hits.len(),
+            total_count = search_result.total_count,
             query_type = %explanation,
             "tantivy search_with_snippets completed"
         );
 
-        let mut results = Vec::with_capacity(top_docs.len());
-        for hit in top_docs {
+        let mut results = Vec::with_capacity(search_result.hits.len());
+        for hit in search_result.hits {
             let doc = load_doc(&searcher, hit.doc_address)?;
 
             let doc_id = doc
@@ -674,10 +694,10 @@ impl TantivyIndex {
 
         let parsed = self.parse_query_lenient(query);
         let searcher = self.reader.searcher();
-        let top_docs = execute_query_with_offset(&searcher, &*parsed, limit, 0)?;
+        let search_result = execute_query_with_offset(&searcher, &*parsed, limit, 0)?;
 
-        let mut results = Vec::with_capacity(top_docs.len());
-        for hit in top_docs {
+        let mut results = Vec::with_capacity(search_result.hits.len());
+        for hit in search_result.hits {
             let doc = load_doc(&searcher, hit.doc_address)?;
             let doc_id = doc
                 .get_first(self.fields.id)

@@ -15,6 +15,20 @@ members = [
     "frankensearch",
     "tools/optimize_params",
 ]
+default-members = [
+    "crates/frankensearch-core",
+    "crates/frankensearch-embed",
+    "crates/frankensearch-index",
+    "crates/frankensearch-lexical",
+    "crates/frankensearch-fusion",
+    "crates/frankensearch-rerank",
+    "crates/frankensearch-storage",
+    "crates/frankensearch-durability",
+    "crates/frankensearch-fsfs",
+    "crates/frankensearch-tui",
+    "crates/frankensearch-ops",
+    "frankensearch",
+]
 
 [workspace.package]
 edition = "2024"

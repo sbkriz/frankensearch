@@ -372,9 +372,15 @@ if [ "$FROM_SOURCE" -eq 1 ]; then
   info "Building from source (requires git, rust nightly)"
   ensure_rust
   if [ -n "$VERSION" ]; then
-    git clone --depth 1 --branch "$VERSION" "https://github.com/${OWNER}/${REPO}.git" "$TMP/src"
+    git clone --depth 1 --recurse-submodules --branch "$VERSION" "https://github.com/${OWNER}/${REPO}.git" "$TMP/src"
   else
-    git clone --depth 1 "https://github.com/${OWNER}/${REPO}.git" "$TMP/src"
+    git clone --depth 1 --recurse-submodules "https://github.com/${OWNER}/${REPO}.git" "$TMP/src"
+  fi
+  # Remove optional workspace members whose path dependencies (e.g. fast_cmaes)
+  # live outside the repository and are unavailable in a fresh clone.
+  if [ -f "$TMP/src/Cargo.toml" ]; then
+    sed -i.bak '/"tools\/optimize_params"/d' "$TMP/src/Cargo.toml"
+    rm -f "$TMP/src/Cargo.toml.bak"
   fi
   if [ "$LITE" -eq 1 ]; then
     info "Building lite variant (no embedded models)"
