@@ -346,8 +346,9 @@ fn build_schema() -> (Schema, SchemaFields) {
 
 /// Build and register the custom tokenizer.
 ///
-/// Pipeline: `SimpleTokenizer` (Unicode word boundary splitting) → `LowerCaser`.
-/// This handles hyphenated identifiers like `POL-358` as a single token.
+/// Pipeline: `SimpleTokenizer` (splits on non-alphanumeric chars) → `LowerCaser`.
+/// Note: `SimpleTokenizer` splits on hyphens, so `POL-358` becomes two tokens
+/// `pol` and `358`. For hyphen-preserving tokenization see `cass_ensure_tokenizer`.
 fn build_tokenizer() -> TextAnalyzer {
     TextAnalyzer::builder(SimpleTokenizer::default())
         .filter(LowerCaser)
@@ -820,14 +821,12 @@ impl LexicalSearch for TantivyIndex {
                         phase: "tantivy.index".into(),
                         reason: "writer lock cancelled".into(),
                     },
-                    asupersync::sync::LockError::Cancelled => {
-                        SearchError::SubsystemError {
-                            subsystem: "tantivy",
-                            source: Box::new(std::io::Error::other(
-                                "writer lock future polled after completion",
-                            )),
-                        }
-                    }
+                    asupersync::sync::LockError::Cancelled => SearchError::SubsystemError {
+                        subsystem: "tantivy",
+                        source: Box::new(std::io::Error::other(
+                            "writer lock future polled after completion",
+                        )),
+                    },
                 })?;
 
                 // Delete any existing document with same ID (upsert semantics).
@@ -862,14 +861,12 @@ impl LexicalSearch for TantivyIndex {
                         phase: "tantivy.batch_index".into(),
                         reason: "writer lock cancelled".into(),
                     },
-                    asupersync::sync::LockError::Cancelled => {
-                        SearchError::SubsystemError {
-                            subsystem: "tantivy",
-                            source: Box::new(std::io::Error::other(
-                                "writer lock future polled after completion",
-                            )),
-                        }
-                    }
+                    asupersync::sync::LockError::Cancelled => SearchError::SubsystemError {
+                        subsystem: "tantivy",
+                        source: Box::new(std::io::Error::other(
+                            "writer lock future polled after completion",
+                        )),
+                    },
                 })?;
 
                 for doc in docs {
@@ -905,14 +902,12 @@ impl LexicalSearch for TantivyIndex {
                         phase: "tantivy.commit".into(),
                         reason: "writer lock cancelled".into(),
                     },
-                    asupersync::sync::LockError::Cancelled => {
-                        SearchError::SubsystemError {
-                            subsystem: "tantivy",
-                            source: Box::new(std::io::Error::other(
-                                "writer lock future polled after completion",
-                            )),
-                        }
-                    }
+                    asupersync::sync::LockError::Cancelled => SearchError::SubsystemError {
+                        subsystem: "tantivy",
+                        source: Box::new(std::io::Error::other(
+                            "writer lock future polled after completion",
+                        )),
+                    },
                 })?;
 
                 writer.commit().map_err(|e| SearchError::SubsystemError {

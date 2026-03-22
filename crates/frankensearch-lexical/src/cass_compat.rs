@@ -12,14 +12,123 @@ use tantivy::schema::IndexRecordOption;
 use tantivy::schema::{
     FAST, Field, INDEXED, STORED, STRING, Schema, TEXT, TextFieldIndexing, TextOptions,
 };
-use tantivy::tokenizer::{LowerCaser, RemoveLongFilter, SimpleTokenizer, TextAnalyzer};
+use tantivy::tokenizer::{
+    LowerCaser, RegexTokenizer, RemoveLongFilter, TextAnalyzer, Token, TokenFilter, TokenStream,
+    Tokenizer,
+};
 use tantivy::{Index, IndexReader, IndexWriter, ReloadPolicy, Term, doc};
 use tracing::{debug, info, warn};
 
 /// Schema version namespace used for cass-compatible Tantivy indexes.
-pub const CASS_SCHEMA_VERSION: &str = "v6";
+pub const CASS_SCHEMA_VERSION: &str = "v7";
 /// Content hash used to detect schema/tokenizer changes that require rebuild.
-pub const CASS_SCHEMA_HASH: &str = "tantivy-schema-v6-long-tokens";
+pub const CASS_SCHEMA_HASH: &str = "tantivy-schema-v7-hyphen-tokens";
+
+// ─── HyphenDecompose token filter ────────────────────────────────────────────
+//
+// When a token contains an interior hyphen (e.g. `bd-q3fy`), the filter emits
+// the compound form **and** the individual sub-parts so that both exact and
+// partial matches work.  Tokens without hyphens pass through unchanged.
+
+/// A [`TokenFilter`] that decomposes hyphenated tokens into their compound form
+/// plus each hyphen-delimited part.
+///
+/// Given the token `bd-q3fy`, the stream will yield:
+///   1. `bd-q3fy`   (compound, same position)
+///   2. `bd`         (part, same position)
+///   3. `q3fy`       (part, same position)
+#[derive(Clone)]
+pub struct HyphenDecompose;
+
+impl TokenFilter for HyphenDecompose {
+    type Tokenizer<T: Tokenizer> = HyphenDecomposeFilter<T>;
+
+    fn transform<T: Tokenizer>(self, tokenizer: T) -> HyphenDecomposeFilter<T> {
+        HyphenDecomposeFilter {
+            inner: tokenizer,
+            pending: Vec::new(),
+        }
+    }
+}
+
+#[derive(Clone)]
+pub struct HyphenDecomposeFilter<T> {
+    inner: T,
+    pending: Vec<Token>,
+}
+
+impl<T: Tokenizer> Tokenizer for HyphenDecomposeFilter<T> {
+    type TokenStream<'a> = HyphenDecomposeStream<'a, T::TokenStream<'a>>;
+
+    fn token_stream<'a>(&'a mut self, text: &'a str) -> Self::TokenStream<'a> {
+        self.pending.clear();
+        HyphenDecomposeStream {
+            tail: self.inner.token_stream(text),
+            pending: &mut self.pending,
+        }
+    }
+}
+
+pub struct HyphenDecomposeStream<'a, T> {
+    tail: T,
+    pending: &'a mut Vec<Token>,
+}
+
+impl<T: TokenStream> HyphenDecomposeStream<'_, T> {
+    /// If the current upstream token contains hyphens, push the compound form
+    /// and sub-parts (in reverse order so `.pop()` yields them in order).
+    fn decompose(&mut self) {
+        let token = self.tail.token();
+        if !token.text.contains('-') {
+            return;
+        }
+        let parts: Vec<&str> = token.text.split('-').filter(|s| !s.is_empty()).collect();
+        if parts.len() < 2 {
+            return;
+        }
+        // Push sub-parts in reverse so pop() yields them left-to-right.
+        for &part in parts.iter().rev() {
+            self.pending.push(Token {
+                text: part.to_owned(),
+                position: token.position,
+                offset_from: token.offset_from,
+                offset_to: token.offset_to,
+                position_length: token.position_length,
+            });
+        }
+        // Push the compound form last so it is popped first.
+        self.pending.push(token.clone());
+    }
+}
+
+impl<T: TokenStream> TokenStream for HyphenDecomposeStream<'_, T> {
+    fn advance(&mut self) -> bool {
+        // Drain any buffered tokens from a previous decomposition first.
+        self.pending.pop();
+        if !self.pending.is_empty() {
+            return true;
+        }
+
+        if !self.tail.advance() {
+            return false;
+        }
+
+        self.decompose();
+        // If decompose produced tokens, the first will come from pending.
+        // Otherwise the plain upstream token is returned via `token()`.
+        true
+    }
+
+    fn token(&self) -> &Token {
+        self.pending.last().unwrap_or_else(|| self.tail.token())
+    }
+
+    fn token_mut(&mut self) -> &mut Token {
+        self.pending
+            .last_mut()
+            .unwrap_or_else(|| self.tail.token_mut())
+    }
+}
 
 /// Minimum time (ms) between merge operations.
 const MERGE_COOLDOWN_MS: i64 = 300_000;
@@ -500,8 +609,21 @@ pub fn cass_index_dir(base: &Path) -> SearchResult<PathBuf> {
 }
 
 /// Register the tokenizer used by cass-compatible lexical fields.
+///
+/// Pipeline:
+///   1. `RegexTokenizer` — matches `\w+(?:-\w+)*`, preserving hyphenated
+///      identifiers like `bd-q3fy` or `POL-358` as single tokens.
+///   2. `HyphenDecompose` — for each hyphenated token, emits the compound
+///      form *and* the individual sub-parts (all at the same position) so
+///      both exact ID searches and partial-word searches match.
+///   3. `LowerCaser` — normalizes to lowercase.
+///   4. `RemoveLongFilter` — drops tokens longer than 256 bytes.
 pub fn cass_ensure_tokenizer(index: &mut Index) {
-    let analyzer = TextAnalyzer::builder(SimpleTokenizer::default())
+    // \w+ matches one or more word chars; (?:-\w+)* extends across hyphens.
+    let regex_tok = RegexTokenizer::new(r"\w+(?:-\w+)*")
+        .expect("hyphen-preserving regex tokenizer pattern must be valid");
+    let analyzer = TextAnalyzer::builder(regex_tok)
+        .filter(HyphenDecompose)
         .filter(LowerCaser)
         .filter(RemoveLongFilter::limit(256))
         .build();
@@ -595,16 +717,17 @@ pub enum CassQueryToken {
     Not,
 }
 
-/// Sanitize query string to match Tantivy's `SimpleTokenizer` behavior for cass indexes.
+/// Sanitize query string to match the `hyphen_normalize` tokenizer for cass indexes.
 ///
-/// `SimpleTokenizer` splits text on any character that is not alphanumeric.
-/// To ensure query terms match indexed tokens, we replace non-alphanumeric characters
-/// with spaces here (preserving `*` for wildcards and `\"` for phrases).
+/// The tokenizer preserves hyphens inside words (e.g. `bd-q3fy`, `POL-358`).
+/// We therefore keep hyphens alongside `*` (wildcards) and `"` (phrases),
+/// replacing all other non-alphanumeric characters with spaces so that query
+/// terms align with indexed tokens.
 #[must_use]
 pub fn cass_sanitize_query(raw: &str) -> String {
     raw.chars()
         .map(|c| {
-            if c.is_alphanumeric() || c == '*' || c == '"' {
+            if c.is_alphanumeric() || c == '*' || c == '"' || c == '-' {
                 c
             } else {
                 ' '
@@ -1174,11 +1297,12 @@ mod cass_query_tests {
     }
 
     #[test]
-    fn cass_sanitize_query_preserves_wildcards_and_quotes() {
+    fn cass_sanitize_query_preserves_wildcards_quotes_and_hyphens() {
         let out = cass_sanitize_query("c++ \"hello-world\" *config*");
         assert!(out.contains('"'));
         assert!(out.contains('*'));
-        assert!(out.contains("hello world"));
+        // Hyphens are now preserved so hyphenated identifiers stay intact.
+        assert!(out.contains("hello-world"));
     }
 
     #[test]
