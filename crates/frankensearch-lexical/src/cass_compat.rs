@@ -619,8 +619,11 @@ pub fn cass_index_dir(base: &Path) -> SearchResult<PathBuf> {
 ///   3. `LowerCaser` — normalizes to lowercase.
 ///   4. `RemoveLongFilter` — drops tokens longer than 256 bytes.
 pub fn cass_ensure_tokenizer(index: &mut Index) {
-    // \w+ matches one or more word chars; (?:-\w+)* extends across hyphens.
-    let regex_tok = RegexTokenizer::new(r"\w+(?:-\w+)*")
+    // [a-zA-Z0-9]+ matches alphanumeric runs; (?:-[a-zA-Z0-9]+)* extends
+    // across hyphens.  We use an explicit character class instead of \w to
+    // exclude underscores — matching the behaviour of the old SimpleTokenizer
+    // and cass_sanitize_query, which both treat `_` as a word boundary.
+    let regex_tok = RegexTokenizer::new(r"[a-zA-Z0-9]+(?:-[a-zA-Z0-9]+)*")
         .expect("hyphen-preserving regex tokenizer pattern must be valid");
     let analyzer = TextAnalyzer::builder(regex_tok)
         .filter(HyphenDecompose)
@@ -1303,6 +1306,14 @@ mod cass_query_tests {
         assert!(out.contains('*'));
         // Hyphens are now preserved so hyphenated identifiers stay intact.
         assert!(out.contains("hello-world"));
+    }
+
+    #[test]
+    fn cass_sanitize_query_splits_on_underscores() {
+        // Underscores are NOT alphanumeric, so the sanitizer replaces them
+        // with spaces — matching the tokenizer which uses [a-zA-Z0-9] (not \w).
+        let out = cass_sanitize_query("hello_world");
+        assert_eq!(out, "hello world");
     }
 
     #[test]
