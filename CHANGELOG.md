@@ -6,9 +6,19 @@ Entries correspond to [GitHub Releases](https://github.com/Dicklesworthstone/fra
 
 ---
 
-## [Unreleased](https://github.com/Dicklesworthstone/frankensearch/compare/v1.1.3...HEAD)
+## [Unreleased](https://github.com/Dicklesworthstone/frankensearch/compare/v1.1.4...HEAD)
 
-> Commits since v1.1.3 (2026-02-23) through HEAD (2026-03-21).
+---
+
+## [v1.1.4](https://github.com/Dicklesworthstone/frankensearch/releases/tag/v1.1.4) -- 2026-03-22
+
+> **Release with binary assets for all platforms** -- [Full diff from v1.1.3](https://github.com/Dicklesworthstone/frankensearch/compare/v1.1.3...v1.1.4)
+>
+> The CI was fixed in March to include aarch64-linux-musl and x86_64-apple-darwin targets,
+> but no release was tagged after v1.1.3. This release makes binaries available.
+> Closes #7, closes #23.
+>
+> Commits since v1.1.3 (2026-02-23) through v1.1.4 (2026-03-22).
 
 ### Cloud API Embedding Providers
 
