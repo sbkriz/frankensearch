@@ -334,16 +334,9 @@ impl FileProtector {
     }
 
     fn restore_backup(backup_path: &Path, destination: &Path) -> SearchResult<()> {
-        if destination.exists()
-            && let Err(error) = fs::remove_file(destination)
-        {
-            warn!(
-                destination = %destination.display(),
-                error = %error,
-                "failed to remove repaired destination before backup restore"
-            );
-            return Err(error.into());
-        }
+        // On POSIX, rename() atomically replaces the destination.  An explicit
+        // remove_file() before rename() creates a window where both files are
+        // absent — a crash in that window loses all data.
         if let Err(error) = fs::rename(backup_path, destination) {
             warn!(
                 backup = %backup_path.display(),
@@ -407,13 +400,15 @@ impl FileProtector {
         let trailer = serialize_repair_trailer(&header, &repair_symbols)?;
 
         let sidecar_path = Self::sidecar_path(path);
-        // Write through a File handle so we can fsync before returning.
-        // A bare fs::write() is not durable: the kernel may buffer the data
-        // and a power loss before writeback would silently lose the sidecar.
+        // Atomic write: write to a temp file, fsync, then rename to the final
+        // path.  This prevents a crash mid-write from leaving a corrupt
+        // partial sidecar at the final path.
         {
-            let mut file = fs::File::create(&sidecar_path)?;
+            let tmp_path = sidecar_path.with_extension("fec.tmp");
+            let mut file = fs::File::create(&tmp_path)?;
             file.write_all(&trailer)?;
             file.sync_all()?;
+            fs::rename(&tmp_path, &sidecar_path)?;
         }
 
         info!(
@@ -1174,9 +1169,14 @@ fn append_to_file(path: &Path, data: &[u8]) -> std::io::Result<()> {
 /// durable even under sudden power loss.  Used for repair outputs and
 /// other writes where silent data loss would be unacceptable.
 fn write_durable(path: &Path, data: &[u8]) -> std::io::Result<()> {
-    let mut file = fs::File::create(path)?;
+    // Atomic write: write to a temp file, fsync, then rename.  File::create
+    // truncates immediately — a crash after truncation but before write_all
+    // completes would lose both the original and the new data.
+    let tmp_path = path.with_extension("durable.tmp");
+    let mut file = fs::File::create(&tmp_path)?;
     file.write_all(data)?;
     file.sync_all()?;
+    fs::rename(&tmp_path, path)?;
     Ok(())
 }
 
