@@ -14526,7 +14526,13 @@ fn read_indexing_checkpoint(index_root: &Path) -> Option<IndexingCheckpoint> {
 fn write_indexing_checkpoint(index_root: &Path, checkpoint: &IndexingCheckpoint) {
     let path = index_root.join(FSFS_CHECKPOINT_FILE);
     if let Ok(json) = serde_json::to_string_pretty(checkpoint) {
-        let _ = write_durable(path, json);
+        if let Err(e) = write_durable(&path, &json) {
+            tracing::error!(
+                path = %path.display(),
+                error = %e,
+                "failed to persist indexing checkpoint — data may be lost on restart"
+            );
+        }
     }
 }
 

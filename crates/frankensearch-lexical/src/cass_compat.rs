@@ -292,7 +292,11 @@ impl CassTantivyIndex {
         };
 
         if needs_rebuild {
-            let _ = std::fs::remove_dir_all(path);
+            if let Err(e) = std::fs::remove_dir_all(path) {
+                if e.kind() != std::io::ErrorKind::NotFound {
+                    return Err(SearchError::from(e));
+                }
+            }
             std::fs::create_dir_all(path).map_err(tantivy_err)?;
         }
 
@@ -304,7 +308,11 @@ impl CassTantivyIndex {
                         error = %e,
                         "failed to open existing cass-compatible index; rebuilding"
                     );
-                    let _ = std::fs::remove_dir_all(path);
+                    if let Err(e) = std::fs::remove_dir_all(path) {
+                        if e.kind() != std::io::ErrorKind::NotFound {
+                            return Err(SearchError::from(e));
+                        }
+                    }
                     std::fs::create_dir_all(path).map_err(tantivy_err)?;
                     Index::create_in_dir(path, cass_build_schema()).map_err(tantivy_err)?
                 }
@@ -593,7 +601,9 @@ pub fn cass_open_search_reader(
         .reload_policy(reload_policy)
         .try_into()
         .map_err(tantivy_err)?;
-    let _ = reader.reload();
+    if let Err(e) = reader.reload() {
+        warn!(error = %e, "index reader reload failed — searches may serve stale results");
+    }
     Ok((reader, fields))
 }
 
