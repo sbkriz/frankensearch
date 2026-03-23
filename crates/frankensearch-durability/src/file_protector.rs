@@ -1173,11 +1173,17 @@ fn write_durable(path: &Path, data: &[u8]) -> std::io::Result<()> {
     // truncates immediately — a crash after truncation but before write_all
     // completes would lose both the original and the new data.
     let tmp_path = path.with_extension("durable.tmp");
-    let mut file = fs::File::create(&tmp_path)?;
-    file.write_all(data)?;
-    file.sync_all()?;
-    fs::rename(&tmp_path, path)?;
-    Ok(())
+    let result = (|| {
+        let mut file = fs::File::create(&tmp_path)?;
+        file.write_all(data)?;
+        file.sync_all()?;
+        fs::rename(&tmp_path, path)?;
+        Ok(())
+    })();
+    if result.is_err() {
+        let _ = fs::remove_file(&tmp_path);
+    }
+    result
 }
 
 #[cfg(test)]

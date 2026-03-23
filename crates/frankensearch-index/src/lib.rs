@@ -1633,32 +1633,47 @@ impl VectorIndexWriter {
         header_prefix.extend_from_slice(&header_crc.to_le_bytes());
 
         let tmp_path = temporary_output_path(&self.path);
-        let mut file = OpenOptions::new()
-            .create(true)
-            .truncate(true)
-            .write(true)
-            .open(&tmp_path)?;
-        {
-            let mut writer = BufWriter::with_capacity(256 * 1024, &mut file);
+        let result = (|| -> SearchResult<()> {
+            let mut file = OpenOptions::new()
+                .create(true)
+                .truncate(true)
+                .write(true)
+                .open(&tmp_path)?;
+            {
+                let mut writer = BufWriter::with_capacity(256 * 1024, &mut file);
 
-            writer.write_all(&header_prefix)?;
-            for entry in &record_entries {
-                writer.write_all(&entry.doc_id_hash.to_le_bytes())?;
-                writer.write_all(&entry.doc_id_offset.to_le_bytes())?;
-                writer.write_all(&entry.doc_id_len.to_le_bytes())?;
-                writer.write_all(&entry.flags.to_le_bytes())?;
+                writer.write_all(&header_prefix)?;
+                for entry in &record_entries {
+                    writer.write_all(&entry.doc_id_hash.to_le_bytes())?;
+                    writer.write_all(&entry.doc_id_offset.to_le_bytes())?;
+                    writer.write_all(&entry.doc_id_len.to_le_bytes())?;
+                    writer.write_all(&entry.flags.to_le_bytes())?;
+                }
+                writer.write_all(&string_table)?;
+                if padding_len > 0 {
+                    writer.write_all(&vec![0_u8; padding_len])?;
+                }
+                write_vector_slab(&mut writer, &self.records, self.quantization)?;
+                writer.flush()?;
             }
-            writer.write_all(&string_table)?;
-            if padding_len > 0 {
-                writer.write_all(&vec![0_u8; padding_len])?;
+
+            file.sync_all()?;
+            fs::rename(&tmp_path, &self.path)?;
+            sync_parent_directory(&self.path)?;
+            Ok(())
+        })();
+
+        if result.is_err() {
+            if tmp_path.exists() {
+                if let Err(cleanup_err) = fs::remove_file(&tmp_path) {
+                    tracing::warn!(
+                        "failed to clean up temp file {} after write error: {cleanup_err}",
+                        tmp_path.display()
+                    );
+                }
             }
-            write_vector_slab(&mut writer, &self.records, self.quantization)?;
-            writer.flush()?;
         }
-
-        file.sync_all()?;
-        fs::rename(&tmp_path, &self.path)?;
-        sync_parent_directory(&self.path)?;
+        result?;
 
         debug!(
             target: "frankensearch.index",
