@@ -54,7 +54,7 @@ pub fn record_search(
     // Check for a recent duplicate within the dedup window.
     let window_start = searched_at.saturating_sub(dedup_window_secs);
     let dedup_params = [
-        SqliteValue::Text(query.to_owned()),
+        SqliteValue::Text(query.to_owned().into()),
         SqliteValue::Integer(window_start),
     ];
     let existing = conn
@@ -97,7 +97,7 @@ pub fn record_search(
     } else {
         // Insert a new entry.
         let insert_params = [
-            SqliteValue::Text(query.to_owned()),
+            SqliteValue::Text(query.to_owned().into()),
             opt_text(query_class),
             opt_i64(result_count),
             opt_i64(phase1_latency_ms),
@@ -144,7 +144,7 @@ pub fn search_history_prefix(
     limit: i64,
 ) -> SearchResult<Vec<SearchHistoryEntry>> {
     let pattern = format!("{prefix}%");
-    let params = [SqliteValue::Text(pattern), SqliteValue::Integer(limit)];
+    let params = [SqliteValue::Text(pattern.into()), SqliteValue::Integer(limit)];
     let rows = conn
         .query_with_params(
             "SELECT id, query, query_class, result_count, phase1_latency_ms, \
@@ -203,7 +203,7 @@ fn parse_history_row(row: &fsqlite::Row) -> SearchResult<SearchHistoryEntry> {
         }
     };
     let query = match row.get(1) {
-        Some(SqliteValue::Text(v)) => v.clone(),
+        Some(SqliteValue::Text(v)) => v.to_string(),
         _ => {
             return Err(SearchError::SubsystemError {
                 subsystem: "storage",
@@ -262,8 +262,8 @@ pub fn add_bookmark(
     // Handle NULL query explicitly since SQL NULL != NULL.
     let existing = if let Some(q) = query {
         let check_params = [
-            SqliteValue::Text(doc_id.to_owned()),
-            SqliteValue::Text(q.to_owned()),
+            SqliteValue::Text(doc_id.to_owned().into()),
+            SqliteValue::Text(q.to_owned().into()),
         ];
         conn.query_with_params(
             "SELECT id FROM bookmarks \
@@ -272,7 +272,7 @@ pub fn add_bookmark(
         )
         .map_err(map_storage_error)?
     } else {
-        let check_params = [SqliteValue::Text(doc_id.to_owned())];
+        let check_params = [SqliteValue::Text(doc_id.to_owned().into())];
         conn.query_with_params(
             "SELECT id FROM bookmarks \
              WHERE doc_id = ?1 AND query IS NULL LIMIT 1;",
@@ -303,7 +303,7 @@ pub fn add_bookmark(
         .map_err(map_storage_error)?;
     } else {
         let insert_params = [
-            SqliteValue::Text(doc_id.to_owned()),
+            SqliteValue::Text(doc_id.to_owned().into()),
             opt_text(query),
             opt_text(note),
             SqliteValue::Integer(created_at),
@@ -342,7 +342,7 @@ pub fn remove_bookmark(conn: &Connection, bookmark_id: i64) -> SearchResult<bool
 
 /// Remove a bookmark by document ID (removes all bookmarks for that doc).
 pub fn remove_bookmark_by_doc(conn: &Connection, doc_id: &str) -> SearchResult<()> {
-    let params = [SqliteValue::Text(doc_id.to_owned())];
+    let params = [SqliteValue::Text(doc_id.to_owned().into())];
     conn.execute_with_params("DELETE FROM bookmarks WHERE doc_id = ?1;", &params)
         .map_err(map_storage_error)?;
     Ok(())
@@ -379,7 +379,7 @@ pub fn count_bookmarks(conn: &Connection) -> SearchResult<i64> {
 
 /// Check if a document is bookmarked.
 pub fn is_bookmarked(conn: &Connection, doc_id: &str) -> SearchResult<bool> {
-    let params = [SqliteValue::Text(doc_id.to_owned())];
+    let params = [SqliteValue::Text(doc_id.to_owned().into())];
     let rows = conn
         .query_with_params(
             "SELECT 1 FROM bookmarks WHERE doc_id = ?1 LIMIT 1;",
@@ -400,7 +400,7 @@ fn parse_bookmark_row(row: &fsqlite::Row) -> SearchResult<Bookmark> {
         }
     };
     let doc_id = match row.get(1) {
-        Some(SqliteValue::Text(v)) => v.clone(),
+        Some(SqliteValue::Text(v)) => v.to_string(),
         _ => {
             return Err(SearchError::SubsystemError {
                 subsystem: "storage",
@@ -430,7 +430,7 @@ fn parse_bookmark_row(row: &fsqlite::Row) -> SearchResult<Bookmark> {
 // ─── Helpers ───────────────────────────────────────────────────────────────
 
 fn opt_text(value: Option<&str>) -> SqliteValue {
-    value.map_or(SqliteValue::Null, |s| SqliteValue::Text(s.to_owned()))
+    value.map_or(SqliteValue::Null, |s| SqliteValue::Text(s.to_owned().into()))
 }
 
 fn opt_i64(value: Option<i64>) -> SqliteValue {
@@ -439,7 +439,7 @@ fn opt_i64(value: Option<i64>) -> SqliteValue {
 
 fn extract_opt_text(row: &fsqlite::Row, index: usize) -> Option<String> {
     match row.get(index) {
-        Some(SqliteValue::Text(v)) => Some(v.clone()),
+        Some(SqliteValue::Text(v)) => Some(v.to_string()),
         _ => None,
     }
 }

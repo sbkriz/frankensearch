@@ -988,8 +988,8 @@ fn dedup_state_for_doc(
     embedder_id: &str,
 ) -> SearchResult<DedupCheckResult> {
     let params = [
-        SqliteValue::Text(doc_id.to_owned()),
-        SqliteValue::Text(embedder_id.to_owned()),
+        SqliteValue::Text(doc_id.to_owned().into()),
+        SqliteValue::Text(embedder_id.to_owned().into()),
     ];
     let rows = conn
         .query_with_params(
@@ -1048,7 +1048,7 @@ fn dedup_state_for_doc(
 }
 
 fn reset_embedding_status(conn: &Connection, doc_id: &str) -> SearchResult<()> {
-    let params = [SqliteValue::Text(doc_id.to_owned())];
+    let params = [SqliteValue::Text(doc_id.to_owned().into())];
     conn.execute_with_params("DELETE FROM embedding_status WHERE doc_id = ?1;", &params)
         .map_err(map_storage_error)?;
     Ok(())
@@ -1164,7 +1164,7 @@ fn unix_timestamp_ms() -> SearchResult<i64> {
 
 fn row_optional_text(row: &fsqlite::Row, index: usize) -> SearchResult<Option<String>> {
     match row.get(index) {
-        Some(SqliteValue::Text(value)) => Ok(Some(value.clone())),
+        Some(SqliteValue::Text(value)) => Ok(Some(value.to_string())),
         Some(SqliteValue::Null) | None => Ok(None),
         Some(other) => Err(pipeline_error(format!(
             "unexpected optional text column type at index {index}: {other:?}"
@@ -2190,11 +2190,11 @@ mod tests {
 
             // Manually insert a hash-tier queue row to exercise skip path in process_batch.
             let params = [
-                SqliteValue::Text("doc-hash".to_owned()),
-                SqliteValue::Text("fnv1a-384".to_owned()),
+                SqliteValue::Text("doc-hash".to_owned().into()),
+                SqliteValue::Text("fnv1a-384".to_owned().into()),
                 SqliteValue::Integer(1),
                 SqliteValue::Integer(unix_timestamp_ms().expect("timestamp should resolve")),
-                SqliteValue::Blob(ContentHasher::hash("hash tier").to_vec()),
+                SqliteValue::Blob(ContentHasher::hash("hash tier").to_vec().into()),
             ];
             runner
                 .storage

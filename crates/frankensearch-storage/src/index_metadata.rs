@@ -194,7 +194,7 @@ impl Storage {
     pub fn get_index_metadata(&self, index_name: &str) -> SearchResult<Option<IndexMetadata>> {
         ensure_non_empty(index_name, "index_name")?;
 
-        let params = [SqliteValue::Text(index_name.to_owned())];
+        let params = [SqliteValue::Text(index_name.to_owned().into())];
         let rows = self
             .connection()
             .query_with_params(
@@ -311,7 +311,7 @@ impl Storage {
         let now = unix_timestamp_ms()?;
         let params = [
             SqliteValue::Integer(now),
-            SqliteValue::Text(index_name.to_owned()),
+            SqliteValue::Text(index_name.to_owned().into()),
         ];
 
         let affected = self
@@ -340,7 +340,7 @@ impl Storage {
         let now = unix_timestamp_ms()?;
         let params = [
             SqliteValue::Integer(now),
-            SqliteValue::Text(index_name.to_owned()),
+            SqliteValue::Text(index_name.to_owned().into()),
         ];
 
         let affected = self
@@ -414,7 +414,7 @@ impl Storage {
         ensure_non_empty(index_name, "index_name")?;
 
         let (history_deleted, metadata_deleted) = self.transaction(|conn| {
-            let params = [SqliteValue::Text(index_name.to_owned())];
+            let params = [SqliteValue::Text(index_name.to_owned().into())];
             let history_deleted = conn
                 .execute_with_params(
                     "DELETE FROM index_build_history WHERE index_name = ?1;",
@@ -450,8 +450,8 @@ fn upsert_index_metadata(
     built_at: i64,
 ) -> SearchResult<()> {
     let update_params = [
-        SqliteValue::Text(params.index_type.clone()),
-        SqliteValue::Text(params.embedder_id.clone()),
+        SqliteValue::Text(params.index_type.clone().into()),
+        SqliteValue::Text(params.embedder_id.clone().into()),
         sqlite_text_opt(params.embedder_revision.as_deref()),
         SqliteValue::Integer(params.dimension),
         SqliteValue::Integer(params.record_count),
@@ -467,7 +467,7 @@ fn upsert_index_metadata(
         sqlite_i64_opt(params.fec_size_bytes),
         sqlite_f64_opt(params.mean_norm),
         sqlite_f64_opt(params.variance),
-        SqliteValue::Text(params.index_name.clone()),
+        SqliteValue::Text(params.index_name.clone().into()),
     ];
 
     let updated = conn
@@ -499,9 +499,9 @@ fn upsert_index_metadata(
     }
 
     let insert_params = [
-        SqliteValue::Text(params.index_name.clone()),
-        SqliteValue::Text(params.index_type.clone()),
-        SqliteValue::Text(params.embedder_id.clone()),
+        SqliteValue::Text(params.index_name.clone().into()),
+        SqliteValue::Text(params.index_type.clone().into()),
+        SqliteValue::Text(params.embedder_id.clone().into()),
         sqlite_text_opt(params.embedder_revision.as_deref()),
         SqliteValue::Integer(params.dimension),
         SqliteValue::Integer(params.record_count),
@@ -546,12 +546,12 @@ fn insert_build_history(
     built_at: i64,
 ) -> SearchResult<()> {
     let sql_params = [
-        SqliteValue::Text(params.index_name.clone()),
+        SqliteValue::Text(params.index_name.clone().into()),
         SqliteValue::Integer(built_at),
         SqliteValue::Integer(params.build_duration_ms),
         SqliteValue::Integer(params.record_count),
         SqliteValue::Integer(params.source_doc_count),
-        SqliteValue::Text(params.trigger.as_str().to_owned()),
+        SqliteValue::Text(params.trigger.as_str().to_owned().into()),
         sqlite_text_opt(params.config_json.as_deref()),
         sqlite_text_opt(params.notes.as_deref()),
         sqlite_f64_opt(params.mean_norm),
@@ -734,7 +734,7 @@ fn row_i64(row: &Row, index: usize, field: &str) -> SearchResult<i64> {
 
 fn row_optional_text(row: &Row, index: usize) -> SearchResult<Option<String>> {
     match row.get(index) {
-        Some(SqliteValue::Text(value)) => Ok(Some(value.clone())),
+        Some(SqliteValue::Text(value)) => Ok(Some(value.to_string())),
         Some(SqliteValue::Null) | None => Ok(None),
         Some(other) => Err(SearchError::SubsystemError {
             subsystem: "storage",
@@ -775,7 +775,7 @@ fn row_optional_f64(row: &Row, index: usize) -> SearchResult<Option<f64>> {
 }
 
 fn sqlite_text_opt(value: Option<&str>) -> SqliteValue {
-    value.map_or(SqliteValue::Null, |v| SqliteValue::Text(v.to_owned()))
+    value.map_or(SqliteValue::Null, |v| SqliteValue::Text(v.to_owned().into()))
 }
 
 fn sqlite_i64_opt(value: Option<i64>) -> SqliteValue {

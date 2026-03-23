@@ -410,8 +410,8 @@ impl StorageDataSource {
                  WHERE project_key = ?1 AND instance_id = ?2 \
                  ORDER BY rowid DESC LIMIT 1;",
                 &[
-                    SqliteValue::Text(project_key.to_owned()),
-                    SqliteValue::Text(instance_id.to_owned()),
+                    SqliteValue::Text(project_key.to_owned().into()),
+                    SqliteValue::Text(instance_id.to_owned().into()),
                 ],
             )
             .map_err(data_source_error)?;
@@ -460,8 +460,8 @@ impl StorageDataSource {
                  WHERE project_key = ?1 AND instance_id = ?2 \
                  ORDER BY ts_ms DESC LIMIT 1;",
                 &[
-                    SqliteValue::Text(project_key.to_owned()),
-                    SqliteValue::Text(instance_id.to_owned()),
+                    SqliteValue::Text(project_key.to_owned().into()),
+                    SqliteValue::Text(instance_id.to_owned().into()),
                 ],
             )
             .map_err(data_source_error)?;

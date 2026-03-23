@@ -346,6 +346,7 @@ mod tests {
     use std::sync::Arc;
     use std::time::{SystemTime, UNIX_EPOCH};
 
+    use frankensearch_core::Cx;
     use fsqlite_core::raptorq_integration::{CodecDecodeResult, CodecEncodeResult, SymbolCodec};
 
     use super::{FsviProtector, FsviVerifyResult};
@@ -358,6 +359,7 @@ mod tests {
     impl SymbolCodec for MockCodec {
         fn encode(
             &self,
+            _cx: &Cx,
             source_data: &[u8],
             symbol_size: u32,
             _repair_overhead: f64,
@@ -386,6 +388,7 @@ mod tests {
 
         fn decode(
             &self,
+            _cx: &Cx,
             symbols: &[(u32, Vec<u8>)],
             k_source: u32,
             _symbol_size: u32,

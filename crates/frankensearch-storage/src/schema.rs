@@ -787,7 +787,7 @@ mod tests {
         let conn = Connection::open(":memory:".to_owned()).expect("in-memory connection");
         conn.execute("CREATE TABLE test_row (val TEXT);")
             .expect("create");
-        let params = [SqliteValue::Text("hello".to_owned())];
+        let params = [SqliteValue::Text("hello".to_owned().into())];
         conn.execute_with_params("INSERT INTO test_row(val) VALUES (?1);", &params)
             .expect("insert");
 
@@ -943,10 +943,10 @@ mod tests {
         bootstrap(&conn).expect("bootstrap should succeed");
 
         let params = [
-            SqliteValue::Text("doc-001".to_owned()),
-            SqliteValue::Text("/path/to/file.rs".to_owned()),
-            SqliteValue::Text("fn main() {}".to_owned()),
-            SqliteValue::Blob(vec![0xAB, 0xCD]),
+            SqliteValue::Text("doc-001".to_owned().into()),
+            SqliteValue::Text("/path/to/file.rs".to_owned().into()),
+            SqliteValue::Text("fn main() {}".to_owned().into()),
+            SqliteValue::Blob(vec![0xAB, 0xCD].into()),
             SqliteValue::Integer(12),
             SqliteValue::Integer(1000),
             SqliteValue::Integer(1000),

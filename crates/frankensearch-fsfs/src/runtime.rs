@@ -1702,7 +1702,7 @@ impl LiveIngestPipeline {
         storage_ctx.storage.transaction(|conn| {
             conn.execute_with_params(
                 "DELETE FROM documents WHERE doc_id = ?1;",
-                &[SqliteValue::Text(rel_key.to_owned())],
+                &[SqliteValue::Text(rel_key.to_owned().into())],
             )
             .map_err(|error| SearchError::SubsystemError {
                 subsystem: "fsfs.watch.storage",
@@ -15762,13 +15762,13 @@ mod tests {
         let fresh_deleted_ts = i64::try_from(now_ms.saturating_sub(retention_ms / 2)).unwrap();
 
         let old_row = [
-            SqliteValue::Text("home:/tmp/old.txt".to_owned()),
-            SqliteValue::Text("home".to_owned()),
-            SqliteValue::Text("/tmp/old.txt".to_owned()),
+            SqliteValue::Text("home:/tmp/old.txt".to_owned().into()),
+            SqliteValue::Text("home".to_owned().into()),
+            SqliteValue::Text("/tmp/old.txt".to_owned().into()),
             SqliteValue::Blob(vec![1_u8; 32]),
             SqliteValue::Integer(1),
-            SqliteValue::Text("full_semantic_lexical".to_owned()),
-            SqliteValue::Text("tombstoned".to_owned()),
+            SqliteValue::Text("full_semantic_lexical".to_owned().into()),
+            SqliteValue::Text("tombstoned".to_owned().into()),
             SqliteValue::Integer(1),
             SqliteValue::Integer(old_deleted_ts - 500),
             SqliteValue::Integer(old_deleted_ts),
@@ -15784,13 +15784,13 @@ mod tests {
         .expect("insert old tombstone row");
 
         let fresh_row = [
-            SqliteValue::Text("home:/tmp/fresh.txt".to_owned()),
-            SqliteValue::Text("home".to_owned()),
-            SqliteValue::Text("/tmp/fresh.txt".to_owned()),
+            SqliteValue::Text("home:/tmp/fresh.txt".to_owned().into()),
+            SqliteValue::Text("home".to_owned().into()),
+            SqliteValue::Text("/tmp/fresh.txt".to_owned().into()),
             SqliteValue::Blob(vec![2_u8; 32]),
             SqliteValue::Integer(1),
-            SqliteValue::Text("full_semantic_lexical".to_owned()),
-            SqliteValue::Text("tombstoned".to_owned()),
+            SqliteValue::Text("full_semantic_lexical".to_owned().into()),
+            SqliteValue::Text("tombstoned".to_owned().into()),
             SqliteValue::Integer(1),
             SqliteValue::Integer(fresh_deleted_ts - 500),
             SqliteValue::Integer(fresh_deleted_ts),
@@ -15829,7 +15829,7 @@ mod tests {
         assert_eq!(remaining.len(), 1);
         assert_eq!(
             remaining[0].get(0),
-            Some(&SqliteValue::Text("home:/tmp/fresh.txt".to_owned()))
+            Some(&SqliteValue::Text("home:/tmp/fresh.txt".to_owned().into()))
         );
     }
 

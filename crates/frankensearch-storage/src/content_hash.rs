@@ -87,8 +87,8 @@ pub fn record_content_hash(
             last_seen_at = excluded.last_seen_at;";
 
     let params = [
-        SqliteValue::Text(content_hash.to_owned()),
-        SqliteValue::Text(doc_id.to_owned()),
+        SqliteValue::Text(content_hash.to_owned().into()),
+        SqliteValue::Text(doc_id.to_owned().into()),
         SqliteValue::Integer(seen_at),
         SqliteValue::Integer(seen_at),
     ];
@@ -101,7 +101,7 @@ pub fn lookup_content_hash(
     conn: &Connection,
     content_hash: &str,
 ) -> SearchResult<Option<ContentHashRecord>> {
-    let params = [SqliteValue::Text(content_hash.to_owned())];
+    let params = [SqliteValue::Text(content_hash.to_owned().into())];
     let rows = conn
         .query_with_params(
             "SELECT content_hash, first_doc_id, seen_count, first_seen_at, last_seen_at \
@@ -225,10 +225,10 @@ fn fetch_existing_dedup_rows(
     sql.push_str(");");
 
     let mut params = Vec::with_capacity(items.len() + 1);
-    params.push(SqliteValue::Text(embedder_id.to_owned()));
+    params.push(SqliteValue::Text(embedder_id.to_owned().into()));
     for (doc_id, _) in items {
         ensure_non_empty(doc_id, "doc_id")?;
-        params.push(SqliteValue::Text(doc_id.clone()));
+        params.push(SqliteValue::Text(doc_id.clone().into()));
     }
 
     let rows = conn
@@ -317,7 +317,7 @@ fn validation_error(field: &'static str, reason: impl AsRef<str>) -> SearchError
 
 fn row_optional_text(row: &Row, index: usize) -> SearchResult<Option<String>> {
     match row.get(index) {
-        Some(SqliteValue::Text(value)) => Ok(Some(value.clone())),
+        Some(SqliteValue::Text(value)) => Ok(Some(value.to_string())),
         Some(SqliteValue::Null) => Ok(None),
         Some(other) => Err(SearchError::SubsystemError {
             subsystem: "storage",
@@ -337,7 +337,7 @@ fn row_optional_text(row: &Row, index: usize) -> SearchResult<Option<String>> {
 
 fn row_blob_32(row: &Row, index: usize, field: &str) -> SearchResult<[u8; 32]> {
     let blob = match row.get(index) {
-        Some(SqliteValue::Blob(blob)) => blob.as_slice(),
+        Some(SqliteValue::Blob(blob)) => blob,
         Some(other) => {
             return Err(SearchError::SubsystemError {
                 subsystem: "storage",
@@ -444,9 +444,9 @@ mod tests {
         status: EmbeddingStatus,
     ) {
         let params = [
-            SqliteValue::Text(doc_id.to_owned()),
-            SqliteValue::Text(embedder_id.to_owned()),
-            SqliteValue::Text(status.as_str().to_owned()),
+            SqliteValue::Text(doc_id.to_owned().into()),
+            SqliteValue::Text(embedder_id.to_owned().into()),
+            SqliteValue::Text(status.as_str().to_owned().into()),
         ];
         storage
             .connection()

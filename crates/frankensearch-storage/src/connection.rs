@@ -390,9 +390,9 @@ mod tests {
 
     fn insert_document_minimal(conn: &fsqlite::Connection, id: &str) -> SearchResult<()> {
         let params = [
-            SqliteValue::Text(id.to_owned()),
-            SqliteValue::Text("fixture-content".to_owned()),
-            SqliteValue::Blob(vec![0x33; 32]),
+            SqliteValue::Text(id.to_owned().into()),
+            SqliteValue::Text("fixture-content".to_owned().into()),
+            SqliteValue::Blob(vec![0x33; 32].into()),
             SqliteValue::Integer(64),
             SqliteValue::Integer(1_739_499_200),
             SqliteValue::Integer(1_739_499_200),
@@ -442,7 +442,7 @@ mod tests {
             .query_row(&format!("PRAGMA {name};"))
             .map_err(super::map_storage_error)?;
         match row.get(0) {
-            Some(SqliteValue::Text(value)) => Ok(value.clone()),
+            Some(SqliteValue::Text(value)) => Ok(value.to_string()),
             Some(SqliteValue::Integer(value)) => Ok(value.to_string()),
             Some(other) => Err(SearchError::SubsystemError {
                 subsystem: "storage",

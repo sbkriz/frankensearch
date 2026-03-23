@@ -3,7 +3,7 @@ use std::fmt;
 use std::sync::Arc;
 use std::time::Instant;
 
-use frankensearch_core::{SearchError, SearchResult};
+use frankensearch_core::{Cx, SearchError, SearchResult};
 use fsqlite_core::raptorq_integration::{
     CodecDecodeResult, CodecEncodeResult, DecodeFailureReason, SymbolCodec,
 };
@@ -43,6 +43,7 @@ pub struct DefaultSymbolCodec;
 impl SymbolCodec for DefaultSymbolCodec {
     fn encode(
         &self,
+        _cx: &Cx,
         source_data: &[u8],
         symbol_size: u32,
         repair_overhead: f64,
@@ -116,6 +117,7 @@ impl SymbolCodec for DefaultSymbolCodec {
 
     fn decode(
         &self,
+        _cx: &Cx,
         symbols: &[(u32, Vec<u8>)],
         k_source: u32,
         symbol_size: u32,
@@ -280,9 +282,11 @@ impl CodecFacade {
 
     pub fn encode(&self, source_data: &[u8]) -> SearchResult<EncodedPayload> {
         let t0 = Instant::now();
+        let cx = Cx::for_testing();
         let mut result = self
             .codec
             .encode(
+                &cx,
                 source_data,
                 self.config.symbol_size,
                 self.config.repair_overhead,
@@ -410,9 +414,10 @@ impl CodecFacade {
             ));
         }
 
+        let cx = Cx::for_testing();
         let outcome = self
             .codec
-            .decode(symbols, k_source, symbol_size)
+            .decode(&cx, symbols, k_source, symbol_size)
             .map_err(map_codec_error)?;
 
         let payload = match outcome {
@@ -747,7 +752,7 @@ mod tests {
     use fsqlite_error::FrankenError;
 
     use super::{
-        CodecFacade, DecodeFailureClass, DecodedPayload, RepairData, VerifyResult,
+        CodecFacade, Cx, DecodeFailureClass, DecodedPayload, RepairData, VerifyResult,
         classify_decode_failure,
     };
     use crate::config::DurabilityConfig;
@@ -761,6 +766,7 @@ mod tests {
     impl SymbolCodec for MockCodec {
         fn encode(
             &self,
+            _cx: &Cx,
             source_data: &[u8],
             symbol_size: u32,
             _repair_overhead: f64,
@@ -800,6 +806,7 @@ mod tests {
 
         fn decode(
             &self,
+            _cx: &Cx,
             symbols: &[(u32, Vec<u8>)],
             k_source: u32,
             symbol_size: u32,
@@ -849,6 +856,7 @@ mod tests {
     impl SymbolCodec for ErrorCodec {
         fn encode(
             &self,
+            _cx: &Cx,
             _source_data: &[u8],
             _symbol_size: u32,
             _repair_overhead: f64,
@@ -858,6 +866,7 @@ mod tests {
 
         fn decode(
             &self,
+            _cx: &Cx,
             _symbols: &[(u32, Vec<u8>)],
             _k_source: u32,
             _symbol_size: u32,

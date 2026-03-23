@@ -627,13 +627,13 @@ mod tests {
 
         let now = 1_710_000_000_000_i64;
         let file_params = [
-            SqliteValue::Text("home:/tmp/a.txt".to_owned()),
-            SqliteValue::Text("home".to_owned()),
-            SqliteValue::Text("/tmp/a.txt".to_owned()),
+            SqliteValue::Text("home:/tmp/a.txt".to_owned().into()),
+            SqliteValue::Text("home".to_owned().into()),
+            SqliteValue::Text("/tmp/a.txt".to_owned().into()),
             SqliteValue::Blob(vec![7_u8; 32]),
             SqliteValue::Integer(3),
-            SqliteValue::Text("full_semantic_lexical".to_owned()),
-            SqliteValue::Text("queued".to_owned()),
+            SqliteValue::Text("full_semantic_lexical".to_owned().into()),
+            SqliteValue::Text("queued".to_owned().into()),
             SqliteValue::Integer(1),
             SqliteValue::Integer(now - 1_000),
             SqliteValue::Integer(now),
@@ -649,15 +649,15 @@ mod tests {
 
         let changelog_params = [
             SqliteValue::Integer(1),
-            SqliteValue::Text("home:/tmp/a.txt".to_owned()),
+            SqliteValue::Text("home:/tmp/a.txt".to_owned().into()),
             SqliteValue::Integer(3),
-            SqliteValue::Text("upsert".to_owned()),
-            SqliteValue::Text("full_semantic_lexical".to_owned()),
-            SqliteValue::Text("queued".to_owned()),
+            SqliteValue::Text("upsert".to_owned().into()),
+            SqliteValue::Text("full_semantic_lexical".to_owned().into()),
+            SqliteValue::Text("queued".to_owned().into()),
             SqliteValue::Blob(vec![7_u8; 32]),
             SqliteValue::Integer(now),
-            SqliteValue::Text("corr-1".to_owned()),
-            SqliteValue::Text("token-1".to_owned()),
+            SqliteValue::Text("corr-1".to_owned().into()),
+            SqliteValue::Text("token-1".to_owned().into()),
         ];
         conn.execute_with_params(
             "INSERT INTO fsfs_catalog_changelog \
@@ -682,7 +682,7 @@ mod tests {
 
         conn.execute_with_params(
             "UPDATE fsfs_catalog_files SET pipeline_status = 'tombstoned', deleted_ts = ?1 WHERE file_key = ?2;",
-            &[SqliteValue::Integer(now), SqliteValue::Text("home:/tmp/a.txt".to_owned())],
+            &[SqliteValue::Integer(now), SqliteValue::Text("home:/tmp/a.txt".to_owned().into())],
         )
         .expect("tombstone update should succeed");
         conn.execute_with_params(CLEANUP_TOMBSTONES_SQL, &[SqliteValue::Integer(now)])
@@ -871,13 +871,13 @@ mod tests {
 
         let now = 1_710_000_000_000_i64;
         let params = [
-            SqliteValue::Text("home:/tmp/a.txt".to_owned()),
-            SqliteValue::Text("home".to_owned()),
-            SqliteValue::Text("/tmp/a.txt".to_owned()),
+            SqliteValue::Text("home:/tmp/a.txt".to_owned().into()),
+            SqliteValue::Text("home".to_owned().into()),
+            SqliteValue::Text("/tmp/a.txt".to_owned().into()),
             SqliteValue::Blob(vec![7_u8; 32]),
             SqliteValue::Integer(3),
-            SqliteValue::Text("full_semantic_lexical".to_owned()),
-            SqliteValue::Text("tombstoned".to_owned()),
+            SqliteValue::Text("full_semantic_lexical".to_owned().into()),
+            SqliteValue::Text("tombstoned".to_owned().into()),
             SqliteValue::Integer(1),
             SqliteValue::Integer(now - 1_000),
             SqliteValue::Integer(now),
@@ -907,13 +907,13 @@ mod tests {
         let old_cutoff = now - 10_000;
 
         let old_tombstone = [
-            SqliteValue::Text("home:/tmp/old.txt".to_owned()),
-            SqliteValue::Text("home".to_owned()),
-            SqliteValue::Text("/tmp/old.txt".to_owned()),
+            SqliteValue::Text("home:/tmp/old.txt".to_owned().into()),
+            SqliteValue::Text("home".to_owned().into()),
+            SqliteValue::Text("/tmp/old.txt".to_owned().into()),
             SqliteValue::Blob(vec![1_u8; 32]),
             SqliteValue::Integer(1),
-            SqliteValue::Text("full_semantic_lexical".to_owned()),
-            SqliteValue::Text("tombstoned".to_owned()),
+            SqliteValue::Text("full_semantic_lexical".to_owned().into()),
+            SqliteValue::Text("tombstoned".to_owned().into()),
             SqliteValue::Integer(1),
             SqliteValue::Integer(now - 20_000),
             SqliteValue::Integer(now - 15_000),
@@ -929,13 +929,13 @@ mod tests {
         .expect("old tombstone seed should insert");
 
         let fresh_tombstone = [
-            SqliteValue::Text("home:/tmp/fresh.txt".to_owned()),
-            SqliteValue::Text("home".to_owned()),
-            SqliteValue::Text("/tmp/fresh.txt".to_owned()),
+            SqliteValue::Text("home:/tmp/fresh.txt".to_owned().into()),
+            SqliteValue::Text("home".to_owned().into()),
+            SqliteValue::Text("/tmp/fresh.txt".to_owned().into()),
             SqliteValue::Blob(vec![2_u8; 32]),
             SqliteValue::Integer(1),
-            SqliteValue::Text("full_semantic_lexical".to_owned()),
-            SqliteValue::Text("tombstoned".to_owned()),
+            SqliteValue::Text("full_semantic_lexical".to_owned().into()),
+            SqliteValue::Text("tombstoned".to_owned().into()),
             SqliteValue::Integer(1),
             SqliteValue::Integer(now - 9_000),
             SqliteValue::Integer(now - 5_000),
@@ -966,7 +966,7 @@ mod tests {
         assert_eq!(remaining.len(), 1);
         assert_eq!(
             remaining[0].get(0),
-            Some(&SqliteValue::Text("home:/tmp/fresh.txt".to_owned()))
+            Some(&SqliteValue::Text("home:/tmp/fresh.txt".to_owned().into()))
         );
     }
 

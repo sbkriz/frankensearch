@@ -1461,8 +1461,8 @@ impl OpsStorage {
         // ON CONFLICT(...) DO UPDATE and query_with_params may not reliably
         // detect existing rows, so we delete any conflicting row first.
         let key_params = [
-            SqliteValue::Text(sample.project_key.clone()),
-            SqliteValue::Text(sample.instance_id.clone()),
+            SqliteValue::Text(sample.project_key.clone().into()),
+            SqliteValue::Text(sample.instance_id.clone().into()),
             SqliteValue::Integer(sample.ts_ms),
         ];
         conn.execute_with_params(
@@ -1473,8 +1473,8 @@ impl OpsStorage {
         .map_err(ops_error)?;
 
         let params = [
-            SqliteValue::Text(sample.project_key.clone()),
-            SqliteValue::Text(sample.instance_id.clone()),
+            SqliteValue::Text(sample.project_key.clone().into()),
+            SqliteValue::Text(sample.instance_id.clone().into()),
             optional_f64(sample.cpu_pct),
             optional_u64(sample.rss_bytes, "rss_bytes")?,
             optional_u64(sample.io_read_bytes, "io_read_bytes")?,
@@ -1503,7 +1503,7 @@ impl OpsStorage {
     pub fn insert_evidence_link(&self, link: &EvidenceLinkRecord) -> SearchResult<()> {
         link.validate()?;
         self.with_transaction(|conn| {
-            let alert_params = [SqliteValue::Text(link.alert_id.clone())];
+            let alert_params = [SqliteValue::Text(link.alert_id.clone().into())];
             let alert_rows = conn
                 .query_with_params(
                     "SELECT project_key FROM alerts_timeline \
@@ -1531,8 +1531,8 @@ impl OpsStorage {
             }
 
             let duplicate_params = [
-                SqliteValue::Text(link.alert_id.clone()),
-                SqliteValue::Text(link.evidence_uri.clone()),
+                SqliteValue::Text(link.alert_id.clone().into()),
+                SqliteValue::Text(link.evidence_uri.clone().into()),
             ];
             let duplicate_rows = conn
                 .query_with_params(
@@ -1555,10 +1555,10 @@ impl OpsStorage {
             let link_id = evidence_link_id(&link.alert_id, &link.evidence_uri);
             let params = [
                 SqliteValue::Text(link_id),
-                SqliteValue::Text(link.project_key.clone()),
-                SqliteValue::Text(link.alert_id.clone()),
-                SqliteValue::Text(link.evidence_type.clone()),
-                SqliteValue::Text(link.evidence_uri.clone()),
+                SqliteValue::Text(link.project_key.clone().into()),
+                SqliteValue::Text(link.alert_id.clone().into()),
+                SqliteValue::Text(link.evidence_type.clone().into()),
+                SqliteValue::Text(link.evidence_uri.clone().into()),
                 link.evidence_hash
                     .clone()
                     .map_or(SqliteValue::Null, SqliteValue::Text),
@@ -1757,8 +1757,8 @@ impl OpsStorage {
                  WHERE scope = ?1 AND scope_key = ?2 AND window = ?3 \
                  ORDER BY window_start_ms DESC LIMIT 1;",
                 &[
-                    SqliteValue::Text(scope.as_str().to_owned()),
-                    SqliteValue::Text(scope_key.to_owned()),
+                    SqliteValue::Text(scope.as_str().to_owned().into()),
+                    SqliteValue::Text(scope_key.to_owned().into()),
                     SqliteValue::Text(window.as_label().to_owned()),
                 ],
             )
@@ -1789,8 +1789,8 @@ impl OpsStorage {
                  WHERE scope = ?1 AND scope_key = ?2 \
                  ORDER BY window_start_ms DESC, window ASC LIMIT ?3;",
                 &[
-                    SqliteValue::Text(scope.as_str().to_owned()),
-                    SqliteValue::Text(scope_key.to_owned()),
+                    SqliteValue::Text(scope.as_str().to_owned().into()),
+                    SqliteValue::Text(scope_key.to_owned().into()),
                     SqliteValue::Integer(usize_to_i64(limit, "limit")?),
                 ],
             )
@@ -1828,8 +1828,8 @@ impl OpsStorage {
                           END DESC, \
                           updated_at_ms DESC LIMIT ?3;",
                 &[
-                    SqliteValue::Text(scope.as_str().to_owned()),
-                    SqliteValue::Text(scope_key.to_owned()),
+                    SqliteValue::Text(scope.as_str().to_owned().into()),
+                    SqliteValue::Text(scope_key.to_owned().into()),
                     SqliteValue::Integer(usize_to_i64(limit, "limit")?),
                 ],
             )
@@ -1859,7 +1859,7 @@ impl OpsStorage {
                      WHERE project_key = ?1 \
                      ORDER BY opened_at_ms DESC LIMIT ?2;",
                     &[
-                        SqliteValue::Text(project_key.to_owned()),
+                        SqliteValue::Text(project_key.to_owned().into()),
                         SqliteValue::Integer(usize_to_i64(limit, "limit")?),
                     ],
                 )
@@ -1894,8 +1894,8 @@ impl OpsStorage {
         ensure_non_empty(project_key, "project_key")?;
         ensure_non_empty(instance_id, "instance_id")?;
         let params = [
-            SqliteValue::Text(project_key.to_owned()),
-            SqliteValue::Text(instance_id.to_owned()),
+            SqliteValue::Text(project_key.to_owned().into()),
+            SqliteValue::Text(instance_id.to_owned().into()),
             SqliteValue::Text(window.as_label().to_owned()),
         ];
         let rows = self
@@ -1968,8 +1968,8 @@ impl OpsStorage {
         ensure_non_empty(instance_id, "instance_id")?;
         let window_start_ms = window.rolling_start_ms(now_ms);
         let params = [
-            SqliteValue::Text(project_key.to_owned()),
-            SqliteValue::Text(instance_id.to_owned()),
+            SqliteValue::Text(project_key.to_owned().into()),
+            SqliteValue::Text(instance_id.to_owned().into()),
             SqliteValue::Integer(window_start_ms),
             SqliteValue::Integer(now_ms),
             SqliteValue::Integer(usize_to_i64(limit, "limit")?),
@@ -2033,8 +2033,8 @@ impl OpsStorage {
         ensure_non_empty(instance_id, "instance_id")?;
         let window_start_ms = window.rolling_start_ms(now_ms);
         let params = [
-            SqliteValue::Text(project_key.to_owned()),
-            SqliteValue::Text(instance_id.to_owned()),
+            SqliteValue::Text(project_key.to_owned().into()),
+            SqliteValue::Text(instance_id.to_owned().into()),
             SqliteValue::Integer(window_start_ms),
             SqliteValue::Integer(now_ms),
         ];
@@ -2323,9 +2323,9 @@ fn apply_migration(conn: &Connection, migration: &OpsMigration) -> SearchResult<
     // Record the migration metadata.
     let params = [
         SqliteValue::Integer(migration.version),
-        SqliteValue::Text(migration.name.to_owned()),
+        SqliteValue::Text(migration.name.to_owned().into()),
         SqliteValue::Integer(unix_timestamp_ms()?),
-        SqliteValue::Text(migration.checksum.to_owned()),
+        SqliteValue::Text(migration.checksum.to_owned().into()),
         SqliteValue::Integer(i64::from(migration.reversible)),
     ];
     conn.execute_with_params(
@@ -2443,7 +2443,7 @@ fn insert_search_event_row(conn: &Connection, event: &SearchEventRecord) -> Sear
     let existing = conn
         .query_with_params(
             "SELECT 1 FROM search_events WHERE event_id = ?1;",
-            &[SqliteValue::Text(event.event_id.clone())],
+            &[SqliteValue::Text(event.event_id.clone().into())],
         )
         .map_err(ops_error)?;
     if !existing.is_empty() {
@@ -2451,13 +2451,13 @@ fn insert_search_event_row(conn: &Connection, event: &SearchEventRecord) -> Sear
     }
 
     let params = [
-        SqliteValue::Text(event.event_id.clone()),
-        SqliteValue::Text(event.project_key.clone()),
-        SqliteValue::Text(event.instance_id.clone()),
-        SqliteValue::Text(event.correlation_id.clone()),
+        SqliteValue::Text(event.event_id.clone().into()),
+        SqliteValue::Text(event.project_key.clone().into()),
+        SqliteValue::Text(event.instance_id.clone().into()),
+        SqliteValue::Text(event.correlation_id.clone().into()),
         optional_text(event.query_hash.as_deref()),
         optional_text(event.query_class.as_deref()),
-        SqliteValue::Text(event.phase.as_str().to_owned()),
+        SqliteValue::Text(event.phase.as_str().to_owned().into()),
         SqliteValue::Integer(u64_to_i64(event.latency_us, "latency_us")?),
         optional_u64(event.result_count, "result_count")?,
         optional_u64(event.memory_bytes, "memory_bytes")?,
@@ -2483,8 +2483,8 @@ fn upsert_search_summary_row(
     stats: &WindowEventStats,
 ) -> SearchResult<()> {
     let key_params = [
-        SqliteValue::Text(project_key.to_owned()),
-        SqliteValue::Text(instance_id.to_owned()),
+        SqliteValue::Text(project_key.to_owned().into()),
+        SqliteValue::Text(instance_id.to_owned().into()),
         SqliteValue::Text(window.as_label().to_owned()),
         SqliteValue::Integer(window_start_ms),
     ];
@@ -2503,8 +2503,8 @@ fn upsert_search_summary_row(
                 p50_latency_us, p95_latency_us, p99_latency_us, avg_result_count\
              ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9);",
             &[
-                SqliteValue::Text(project_key.to_owned()),
-                SqliteValue::Text(instance_id.to_owned()),
+                SqliteValue::Text(project_key.to_owned().into()),
+                SqliteValue::Text(instance_id.to_owned().into()),
                 SqliteValue::Text(window.as_label().to_owned()),
                 SqliteValue::Integer(window_start_ms),
                 SqliteValue::Integer(u64_to_i64(stats.search_count, "search_count")?),
@@ -2527,8 +2527,8 @@ fn upsert_search_summary_row(
                 optional_u64(stats.p95_latency_us, "p95_latency_us")?,
                 optional_u64(stats.p99_latency_us, "p99_latency_us")?,
                 optional_f64(stats.avg_result_count),
-                SqliteValue::Text(project_key.to_owned()),
-                SqliteValue::Text(instance_id.to_owned()),
+                SqliteValue::Text(project_key.to_owned().into()),
+                SqliteValue::Text(instance_id.to_owned().into()),
                 SqliteValue::Text(window.as_label().to_owned()),
                 SqliteValue::Integer(window_start_ms),
             ],
@@ -2553,8 +2553,8 @@ fn compute_window_event_stats(
              WHERE project_key = ?1 AND instance_id = ?2 AND ts_ms >= ?3 AND ts_ms <= ?4 \
              ORDER BY latency_us ASC;",
             &[
-                SqliteValue::Text(project_key.to_owned()),
-                SqliteValue::Text(instance_id.to_owned()),
+                SqliteValue::Text(project_key.to_owned().into()),
+                SqliteValue::Text(instance_id.to_owned().into()),
                 SqliteValue::Integer(window_start_ms),
                 SqliteValue::Integer(window_end_ms),
             ],
@@ -2633,7 +2633,7 @@ fn compute_slo_window_stats(
              WHERE project_key = ?1 AND ts_ms >= ?2 AND ts_ms <= ?3 \
              ORDER BY latency_us ASC;",
             &[
-                SqliteValue::Text(project_key.to_owned()),
+                SqliteValue::Text(project_key.to_owned().into()),
                 SqliteValue::Integer(window_start_ms),
                 SqliteValue::Integer(window_end_ms),
             ],
@@ -2860,8 +2860,8 @@ fn upsert_slo_rollup_row(conn: &Connection, evaluation: &SloEvaluation) -> Searc
         evaluation.window_start_ms
     );
     let key_params = [
-        SqliteValue::Text(evaluation.scope.as_str().to_owned()),
-        SqliteValue::Text(evaluation.scope_key.clone()),
+        SqliteValue::Text(evaluation.scope.as_str().to_owned().into()),
+        SqliteValue::Text(evaluation.scope_key.clone().into()),
         SqliteValue::Text(evaluation.window.as_label().to_owned()),
         SqliteValue::Integer(evaluation.window_start_ms),
     ];
@@ -2883,8 +2883,8 @@ fn upsert_slo_rollup_row(conn: &Connection, evaluation: &SloEvaluation) -> Searc
              ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18);",
             &[
                 SqliteValue::Text(rollup_id),
-                SqliteValue::Text(evaluation.scope.as_str().to_owned()),
-                SqliteValue::Text(evaluation.scope_key.clone()),
+                SqliteValue::Text(evaluation.scope.as_str().to_owned().into()),
+                SqliteValue::Text(evaluation.scope_key.clone().into()),
                 optional_text(evaluation.project_key.as_deref()),
                 SqliteValue::Text(evaluation.window.as_label().to_owned()),
                 SqliteValue::Integer(evaluation.window_start_ms),
@@ -2906,8 +2906,8 @@ fn upsert_slo_rollup_row(conn: &Connection, evaluation: &SloEvaluation) -> Searc
                 optional_f64(evaluation.error_rate),
                 optional_f64(evaluation.error_budget_burn),
                 optional_f64(evaluation.remaining_budget_ratio),
-                SqliteValue::Text(evaluation.health.as_str().to_owned()),
-                SqliteValue::Text(evaluation.reason_code.clone()),
+                SqliteValue::Text(evaluation.health.as_str().to_owned().into()),
+                SqliteValue::Text(evaluation.reason_code.clone().into()),
                 SqliteValue::Integer(evaluation.generated_at_ms),
             ],
         )
@@ -2940,11 +2940,11 @@ fn upsert_slo_rollup_row(conn: &Connection, evaluation: &SloEvaluation) -> Searc
                 optional_f64(evaluation.error_rate),
                 optional_f64(evaluation.error_budget_burn),
                 optional_f64(evaluation.remaining_budget_ratio),
-                SqliteValue::Text(evaluation.health.as_str().to_owned()),
-                SqliteValue::Text(evaluation.reason_code.clone()),
+                SqliteValue::Text(evaluation.health.as_str().to_owned().into()),
+                SqliteValue::Text(evaluation.reason_code.clone().into()),
                 SqliteValue::Integer(evaluation.generated_at_ms),
-                SqliteValue::Text(evaluation.scope.as_str().to_owned()),
-                SqliteValue::Text(evaluation.scope_key.clone()),
+                SqliteValue::Text(evaluation.scope.as_str().to_owned().into()),
+                SqliteValue::Text(evaluation.scope_key.clone().into()),
                 SqliteValue::Text(evaluation.window.as_label().to_owned()),
                 SqliteValue::Integer(evaluation.window_start_ms),
             ],
@@ -2969,8 +2969,8 @@ fn resolve_stale_anomaly_rows(
            AND window_start_ms < ?5;",
         &[
             SqliteValue::Integer(now_ms),
-            SqliteValue::Text(scope.as_str().to_owned()),
-            SqliteValue::Text(scope_key.to_owned()),
+            SqliteValue::Text(scope.as_str().to_owned().into()),
+            SqliteValue::Text(scope_key.to_owned().into()),
             SqliteValue::Text(window.as_label().to_owned()),
             SqliteValue::Integer(active_window_start_ms),
         ],
@@ -3007,7 +3007,7 @@ fn sync_rollup_anomaly(
     let rows = conn
         .query_with_params(
             "SELECT state FROM anomaly_materializations WHERE anomaly_id = ?1;",
-            &[SqliteValue::Text(anomaly_id.clone())],
+            &[SqliteValue::Text(anomaly_id.clone().into())],
         )
         .map_err(ops_error)?;
     let existing_state = rows
@@ -3025,17 +3025,17 @@ fn sync_rollup_anomaly(
                  ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, 'open', ?14, ?14, NULL);",
                 &[
                     SqliteValue::Text(anomaly_id),
-                    SqliteValue::Text(evaluation.scope.as_str().to_owned()),
-                    SqliteValue::Text(evaluation.scope_key.clone()),
+                    SqliteValue::Text(evaluation.scope.as_str().to_owned().into()),
+                    SqliteValue::Text(evaluation.scope_key.clone().into()),
                     optional_text(evaluation.project_key.as_deref()),
                     SqliteValue::Text(evaluation.window.as_label().to_owned()),
                     SqliteValue::Integer(evaluation.window_start_ms),
-                    SqliteValue::Text(candidate.metric_name.clone()),
+                    SqliteValue::Text(candidate.metric_name.clone().into()),
                     SqliteValue::Float(candidate.baseline_value),
                     SqliteValue::Float(candidate.observed_value),
                     SqliteValue::Float(candidate.deviation_ratio),
-                    SqliteValue::Text(candidate.severity.as_str().to_owned()),
-                    SqliteValue::Text(candidate.reason_code.clone()),
+                    SqliteValue::Text(candidate.severity.as_str().to_owned().into()),
+                    SqliteValue::Text(candidate.reason_code.clone().into()),
                     SqliteValue::Null,
                     SqliteValue::Integer(now_ms),
                 ],
@@ -3052,12 +3052,12 @@ fn sync_rollup_anomaly(
                  WHERE anomaly_id = ?10;",
                 &[
                     optional_text(evaluation.project_key.as_deref()),
-                    SqliteValue::Text(candidate.metric_name.clone()),
+                    SqliteValue::Text(candidate.metric_name.clone().into()),
                     SqliteValue::Float(candidate.baseline_value),
                     SqliteValue::Float(candidate.observed_value),
                     SqliteValue::Float(candidate.deviation_ratio),
-                    SqliteValue::Text(candidate.severity.as_str().to_owned()),
-                    SqliteValue::Text(candidate.reason_code.clone()),
+                    SqliteValue::Text(candidate.severity.as_str().to_owned().into()),
+                    SqliteValue::Text(candidate.reason_code.clone().into()),
                     SqliteValue::Null,
                     SqliteValue::Integer(now_ms),
                     SqliteValue::Text(anomaly_id),
@@ -3075,12 +3075,12 @@ fn sync_rollup_anomaly(
                  WHERE anomaly_id = ?10;",
                 &[
                     optional_text(evaluation.project_key.as_deref()),
-                    SqliteValue::Text(candidate.metric_name.clone()),
+                    SqliteValue::Text(candidate.metric_name.clone().into()),
                     SqliteValue::Float(candidate.baseline_value),
                     SqliteValue::Float(candidate.observed_value),
                     SqliteValue::Float(candidate.deviation_ratio),
-                    SqliteValue::Text(candidate.severity.as_str().to_owned()),
-                    SqliteValue::Text(candidate.reason_code.clone()),
+                    SqliteValue::Text(candidate.severity.as_str().to_owned().into()),
+                    SqliteValue::Text(candidate.reason_code.clone().into()),
                     SqliteValue::Null,
                     SqliteValue::Integer(now_ms),
                     SqliteValue::Text(anomaly_id),
@@ -3257,7 +3257,7 @@ fn ensure_non_empty(value: &str, field: &str) -> SearchResult<()> {
 }
 
 fn optional_text(value: Option<&str>) -> SqliteValue {
-    value.map_or(SqliteValue::Null, |text| SqliteValue::Text(text.to_owned()))
+    value.map_or(SqliteValue::Null, |text| SqliteValue::Text(text.to_owned().into()))
 }
 
 fn optional_u64(value: Option<u64>, field: &str) -> SearchResult<SqliteValue> {
@@ -3483,7 +3483,7 @@ mod tests {
         let rows = conn
             .query_with_params(
                 "SELECT state FROM anomaly_materializations WHERE anomaly_id = ?1 LIMIT 1;",
-                &[SqliteValue::Text(anomaly_id.to_owned())],
+                &[SqliteValue::Text(anomaly_id.to_owned().into())],
             )
             .map_err(ops_error)
             .expect("anomaly state query should succeed");
@@ -3499,7 +3499,7 @@ mod tests {
             .query_with_params(
                 "SELECT resolved_at_ms FROM anomaly_materializations \
                  WHERE anomaly_id = ?1 LIMIT 1;",
-                &[SqliteValue::Text(anomaly_id.to_owned())],
+                &[SqliteValue::Text(anomaly_id.to_owned().into())],
             )
             .map_err(ops_error)
             .expect("anomaly resolved_at query should succeed");
@@ -4674,9 +4674,9 @@ mod tests {
         seed_project_and_instance(&conn);
 
         let params = [
-            SqliteValue::Text("project-a".to_owned()),
-            SqliteValue::Text("instance-a".to_owned()),
-            SqliteValue::Text("2h".to_owned()),
+            SqliteValue::Text("project-a".to_owned().into()),
+            SqliteValue::Text("instance-a".to_owned().into()),
+            SqliteValue::Text("2h".to_owned().into()),
             SqliteValue::Integer(0),
             SqliteValue::Integer(10),
             SqliteValue::Integer(100),
@@ -4708,8 +4708,8 @@ mod tests {
             .enumerate()
         {
             let params = [
-                SqliteValue::Text("project-a".to_owned()),
-                SqliteValue::Text("instance-a".to_owned()),
+                SqliteValue::Text("project-a".to_owned().into()),
+                SqliteValue::Text("instance-a".to_owned().into()),
                 SqliteValue::Text((*window).to_owned()),
                 SqliteValue::Integer(i64::try_from(index).expect("index fits in i64")),
                 SqliteValue::Integer(10),
@@ -4817,8 +4817,8 @@ mod tests {
                  WHERE project_key = ?1 AND evidence_uri = ?2 \
                  ORDER BY alert_id ASC;",
                 &[
-                    SqliteValue::Text("project-a".to_owned()),
-                    SqliteValue::Text(shared_uri.to_owned()),
+                    SqliteValue::Text("project-a".to_owned().into()),
+                    SqliteValue::Text(shared_uri.to_owned().into()),
                 ],
             )
             .map_err(ops_error)

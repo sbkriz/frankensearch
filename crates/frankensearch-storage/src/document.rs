@@ -148,7 +148,7 @@ impl Storage {
     pub fn get_document(&self, doc_id: &str) -> SearchResult<Option<DocumentRecord>> {
         ensure_non_empty(doc_id, "doc_id")?;
 
-        let params = [SqliteValue::Text(doc_id.to_owned())];
+        let params = [SqliteValue::Text(doc_id.to_owned().into())];
         let rows = self
             .connection()
             .query_with_params(
@@ -219,7 +219,7 @@ impl Storage {
              LIMIT {limit};"
         );
 
-        let params = [SqliteValue::Text(embedder_id.to_owned())];
+        let params = [SqliteValue::Text(embedder_id.to_owned().into())];
         let rows = self
             .connection()
             .query_with_params(&sql, &params)
@@ -252,9 +252,9 @@ impl Storage {
             }
 
             let params = [
-                SqliteValue::Text(doc_id.to_owned()),
-                SqliteValue::Text(embedder_id.to_owned()),
-                SqliteValue::Text(EmbeddingStatus::Embedded.as_str().to_owned()),
+                SqliteValue::Text(doc_id.to_owned().into()),
+                SqliteValue::Text(embedder_id.to_owned().into()),
+                SqliteValue::Text(EmbeddingStatus::Embedded.as_str().to_owned().into()),
                 SqliteValue::Integer(finished_at),
             ];
             conn.execute_with_params(
@@ -298,10 +298,10 @@ impl Storage {
             }
 
             let params = [
-                SqliteValue::Text(doc_id.to_owned()),
-                SqliteValue::Text(embedder_id.to_owned()),
-                SqliteValue::Text(EmbeddingStatus::Failed.as_str().to_owned()),
-                SqliteValue::Text(error_message.to_owned()),
+                SqliteValue::Text(doc_id.to_owned().into()),
+                SqliteValue::Text(embedder_id.to_owned().into()),
+                SqliteValue::Text(EmbeddingStatus::Failed.as_str().to_owned().into()),
+                SqliteValue::Text(error_message.to_owned().into()),
             ];
             conn.execute_with_params(
                 "INSERT INTO embedding_status \
@@ -339,10 +339,10 @@ impl Storage {
             }
 
             let params = [
-                SqliteValue::Text(doc_id.to_owned()),
-                SqliteValue::Text(embedder_id.to_owned()),
-                SqliteValue::Text(EmbeddingStatus::Skipped.as_str().to_owned()),
-                SqliteValue::Text(reason.to_owned()),
+                SqliteValue::Text(doc_id.to_owned().into()),
+                SqliteValue::Text(embedder_id.to_owned().into()),
+                SqliteValue::Text(EmbeddingStatus::Skipped.as_str().to_owned().into()),
+                SqliteValue::Text(reason.to_owned().into()),
             ];
             conn.execute_with_params(
                 "INSERT INTO embedding_status \
@@ -372,7 +372,7 @@ impl Storage {
     pub fn count_by_status(&self, embedder_id: &str) -> SearchResult<StatusCounts> {
         ensure_non_empty(embedder_id, "embedder_id")?;
 
-        let params = [SqliteValue::Text(embedder_id.to_owned())];
+        let params = [SqliteValue::Text(embedder_id.to_owned().into())];
         let rows = self
             .connection()
             .query_with_params(
@@ -433,7 +433,7 @@ impl Storage {
     pub fn delete_document(&self, doc_id: &str) -> SearchResult<bool> {
         ensure_non_empty(doc_id, "doc_id")?;
 
-        let params = [SqliteValue::Text(doc_id.to_owned())];
+        let params = [SqliteValue::Text(doc_id.to_owned().into())];
         let deleted = self
             .connection()
             .execute_with_params("DELETE FROM documents WHERE doc_id = ?1;", &params)
@@ -505,10 +505,10 @@ pub fn upsert_document(conn: &Connection, doc: &DocumentRecord) -> SearchResult<
 
     if document_exists(conn, &doc.doc_id)? {
         let params = [
-            SqliteValue::Text(doc.doc_id.clone()),
+            SqliteValue::Text(doc.doc_id.clone().into()),
             sqlite_text_opt(doc.source_path.as_deref()),
-            SqliteValue::Text(doc.content_preview.clone()),
-            SqliteValue::Blob(doc.content_hash.to_vec()),
+            SqliteValue::Text(doc.content_preview.clone().into()),
+            SqliteValue::Blob(doc.content_hash.to_vec().into()),
             SqliteValue::Integer(content_length),
             SqliteValue::Integer(doc.updated_at),
             sqlite_text_opt(metadata_json.as_deref()),
@@ -527,10 +527,10 @@ pub fn upsert_document(conn: &Connection, doc: &DocumentRecord) -> SearchResult<
         .map_err(storage_error)
     } else {
         let params = [
-            SqliteValue::Text(doc.doc_id.clone()),
+            SqliteValue::Text(doc.doc_id.clone().into()),
             sqlite_text_opt(doc.source_path.as_deref()),
-            SqliteValue::Text(doc.content_preview.clone()),
-            SqliteValue::Blob(doc.content_hash.to_vec()),
+            SqliteValue::Text(doc.content_preview.clone().into()),
+            SqliteValue::Blob(doc.content_hash.to_vec().into()),
             SqliteValue::Integer(content_length),
             SqliteValue::Integer(doc.created_at),
             SqliteValue::Integer(doc.updated_at),
@@ -629,11 +629,11 @@ fn ensure_non_empty(value: &str, field: &'static str) -> SearchResult<()> {
 }
 
 fn sqlite_text_opt(value: Option<&str>) -> SqliteValue {
-    value.map_or(SqliteValue::Null, |v| SqliteValue::Text(v.to_owned()))
+    value.map_or(SqliteValue::Null, |v| SqliteValue::Text(v.to_owned().into()))
 }
 
 fn document_exists(conn: &Connection, doc_id: &str) -> SearchResult<bool> {
-    let params = [SqliteValue::Text(doc_id.to_owned())];
+    let params = [SqliteValue::Text(doc_id.to_owned().into())];
     let rows = conn
         .query_with_params(
             "SELECT doc_id FROM documents WHERE doc_id = ?1 LIMIT 1;",
@@ -644,7 +644,7 @@ fn document_exists(conn: &Connection, doc_id: &str) -> SearchResult<bool> {
 }
 
 fn fetch_content_hash(conn: &Connection, doc_id: &str) -> SearchResult<Option<[u8; 32]>> {
-    let params = [SqliteValue::Text(doc_id.to_owned())];
+    let params = [SqliteValue::Text(doc_id.to_owned().into())];
     let rows = conn
         .query_with_params(
             "SELECT content_hash FROM documents WHERE doc_id = ?1 LIMIT 1;",
@@ -658,7 +658,7 @@ fn fetch_content_hash(conn: &Connection, doc_id: &str) -> SearchResult<Option<[u
 }
 
 fn reset_embedding_status(conn: &Connection, doc_id: &str) -> SearchResult<()> {
-    let params = [SqliteValue::Text(doc_id.to_owned())];
+    let params = [SqliteValue::Text(doc_id.to_owned().into())];
     conn.execute_with_params("DELETE FROM embedding_status WHERE doc_id = ?1;", &params)
         .map_err(storage_error)?;
     Ok(())
@@ -722,7 +722,7 @@ fn row_text<'a>(row: &'a Row, index: usize, field: &str) -> SearchResult<&'a str
 
 fn row_optional_text(row: &Row, index: usize) -> SearchResult<Option<String>> {
     match row.get(index) {
-        Some(SqliteValue::Text(value)) => Ok(Some(value.clone())),
+        Some(SqliteValue::Text(value)) => Ok(Some(value.to_string())),
         Some(SqliteValue::Null) | None => Ok(None),
         Some(other) => Err(SearchError::SubsystemError {
             subsystem: "storage",
@@ -736,7 +736,7 @@ fn row_optional_text(row: &Row, index: usize) -> SearchResult<Option<String>> {
 
 fn row_blob_32(row: &Row, index: usize, field: &str) -> SearchResult<[u8; 32]> {
     let blob = match row.get(index) {
-        Some(SqliteValue::Blob(blob)) => blob.as_slice(),
+        Some(SqliteValue::Blob(blob)) => blob,
         Some(other) => {
             return Err(SearchError::SubsystemError {
                 subsystem: "storage",
