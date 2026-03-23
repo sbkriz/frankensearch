@@ -925,9 +925,15 @@ async fn download_and_install_manifest(
     );
 
     let staged = match downloader
-        .download_model(cx, manifest, &staging_root, &mut lifecycle, move |progress| {
-            reporter_for_cb.report(progress);
-        })
+        .download_model(
+            cx,
+            manifest,
+            &staging_root,
+            &mut lifecycle,
+            move |progress| {
+                reporter_for_cb.report(progress);
+            },
+        )
         .await
     {
         Ok(staged) => staged,

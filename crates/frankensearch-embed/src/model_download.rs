@@ -213,7 +213,15 @@ impl ModelDownloader {
             );
 
             if let Err(err) = self
-                .download_file_with_retry(cx, &url, &file_dest, file, idx, files_total, &on_progress)
+                .download_file_with_retry(
+                    cx,
+                    &url,
+                    &file_dest,
+                    file,
+                    idx,
+                    files_total,
+                    &on_progress,
+                )
                 .await
             {
                 lifecycle.fail_verification(format!("download failed for '{}': {err}", file.name));

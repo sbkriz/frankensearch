@@ -550,12 +550,10 @@ impl TantivyIndex {
                     phase: "tantivy.delete".into(),
                     reason: "writer lock cancelled".into(),
                 },
-                _ => {
-                    SearchError::SubsystemError {
-                        subsystem: "tantivy",
-                        source: Box::new(std::io::Error::other("writer mutex lock failed")),
-                    }
-                }
+                _ => SearchError::SubsystemError {
+                    subsystem: "tantivy",
+                    source: Box::new(std::io::Error::other("writer mutex lock failed")),
+                },
             })?
             .delete_term(term);
         Ok(())
@@ -821,12 +819,10 @@ impl LexicalSearch for TantivyIndex {
                         phase: "tantivy.index".into(),
                         reason: "writer lock cancelled".into(),
                     },
-                    _ => {
-                        SearchError::SubsystemError {
-                            subsystem: "tantivy",
-                            source: Box::new(std::io::Error::other("writer mutex lock failed")),
-                        }
-                    }
+                    _ => SearchError::SubsystemError {
+                        subsystem: "tantivy",
+                        source: Box::new(std::io::Error::other("writer mutex lock failed")),
+                    },
                 })?;
 
                 // Delete any existing document with same ID (upsert semantics).
@@ -861,12 +857,10 @@ impl LexicalSearch for TantivyIndex {
                         phase: "tantivy.batch_index".into(),
                         reason: "writer lock cancelled".into(),
                     },
-                    _ => {
-                        SearchError::SubsystemError {
-                            subsystem: "tantivy",
-                            source: Box::new(std::io::Error::other("writer mutex lock failed")),
-                        }
-                    }
+                    _ => SearchError::SubsystemError {
+                        subsystem: "tantivy",
+                        source: Box::new(std::io::Error::other("writer mutex lock failed")),
+                    },
                 })?;
 
                 for doc in docs {
@@ -902,12 +896,10 @@ impl LexicalSearch for TantivyIndex {
                         phase: "tantivy.commit".into(),
                         reason: "writer lock cancelled".into(),
                     },
-                    _ => {
-                        SearchError::SubsystemError {
-                            subsystem: "tantivy",
-                            source: Box::new(std::io::Error::other("writer mutex lock failed")),
-                        }
-                    }
+                    _ => SearchError::SubsystemError {
+                        subsystem: "tantivy",
+                        source: Box::new(std::io::Error::other("writer mutex lock failed")),
+                    },
                 })?;
 
                 writer.commit().map_err(|e| SearchError::SubsystemError {
