@@ -1031,18 +1031,18 @@ impl VectorIndex {
             Ok(())
         })();
 
-        if let Err(e) = &result {
+        if result.is_err() {
             // Clean up the temp file on error (best-effort).
             if tmp_path.exists() {
                 if let Err(cleanup_err) = fs::remove_file(&tmp_path) {
                     tracing::warn!(
-                        "failed to clean up temp file {} after rewrite error {e}: {cleanup_err}",
+                        "failed to clean up temp file {} after rewrite error: {cleanup_err}",
                         tmp_path.display()
                     );
                 }
             }
-            return Err(e.clone());
         }
+        result?;
 
         // Reload
         let config = self.wal_config.clone();

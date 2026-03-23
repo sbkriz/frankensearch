@@ -553,25 +553,27 @@ impl VectorIndex {
     }
 
     fn resolve_sorted_entries(&self, winners: Vec<HeapEntry>) -> SearchResult<Vec<VectorHit>> {
-        // Collect doc_id_hashes for all WAL entries in the result set so that
+        // Collect actual doc_ids for all WAL entries in the result set so that
         // main-index duplicates can be suppressed in favour of the WAL version.
-        let wal_doc_hashes: HashSet<u64> = winners
+        // We use String instead of doc_id_hash to avoid silent collisions where
+        // two different documents happen to share the same FNV-1a hash.
+        let wal_doc_ids: HashSet<&str> = winners
             .iter()
             .filter(|w| is_wal_index(w.index))
             .map(|w| {
                 let wal_idx = from_wal_index(w.index);
-                self.wal_entries[wal_idx].doc_id_hash
+                self.wal_entries[wal_idx].doc_id.as_str()
             })
             .collect();
 
-        let mut seen = HashSet::with_capacity(winners.len());
+        let mut seen: HashSet<String> = HashSet::with_capacity(winners.len());
         let mut hits = Vec::with_capacity(winners.len());
         for winner in winners {
             if is_wal_index(winner.index) {
                 let wal_idx = from_wal_index(winner.index);
-                let doc_id_hash = self.wal_entries[wal_idx].doc_id_hash;
+                let doc_id = &self.wal_entries[wal_idx].doc_id;
                 // Skip WAL-vs-WAL duplicates (keep the first, i.e. highest-scored).
-                if !seen.insert(doc_id_hash) {
+                if !seen.insert(doc_id.clone()) {
                     continue;
                 }
                 hits.push(self.resolve_wal_hit(&winner)?);
@@ -580,13 +582,13 @@ impl VectorIndex {
                 if self.is_deleted(winner.index) {
                     continue;
                 }
-                let record = self.record_at(winner.index)?;
+                let doc_id = self.doc_id_at(winner.index)?.to_owned();
                 // Skip if a WAL entry for the same doc exists (WAL is newer).
-                if wal_doc_hashes.contains(&record.doc_id_hash) {
+                if wal_doc_ids.contains(doc_id.as_str()) {
                     continue;
                 }
                 // Skip main-vs-main duplicates.
-                if !seen.insert(record.doc_id_hash) {
+                if !seen.insert(doc_id.clone()) {
                     continue;
                 }
                 let index_u32 =
@@ -595,7 +597,6 @@ impl VectorIndex {
                         value: winner.index.to_string(),
                         reason: "winner index exceeds u32 range for VectorHit".to_owned(),
                     })?;
-                let doc_id = self.doc_id_at(winner.index)?.to_owned();
                 hits.push(VectorHit {
                     index: index_u32,
                     score: winner.score,
