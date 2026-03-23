@@ -797,12 +797,17 @@ impl VectorIndex {
             next_generation(self.metadata.compaction_gen),
         )?;
 
-        // Remove WAL sidecar.
-        let wal_path = wal::wal_path_for(&self.path);
-        wal::remove_wal(&wal_path)?;
-
-        // Clear WAL entries in memory (they are now in Main).
+        // After rewrite_index succeeds, clear in-memory WAL state immediately
+        // (the data is now in the main index). If remove_wal fails, the stale
+        // WAL file on disk will be detected and discarded on next open() via
+        // the generation counter.
         self.wal_entries.clear();
+
+        // Then try to remove the WAL file (best-effort).
+        let wal_path = wal::wal_path_for(&self.path);
+        if let Err(e) = wal::remove_wal(&wal_path) {
+            tracing::warn!("failed to remove WAL file after compaction: {e}");
+        }
 
         let elapsed = start.elapsed();
         let stats = CompactionStats {
@@ -935,90 +940,109 @@ impl VectorIndex {
 
         // Open temp file
         let tmp_path = temporary_output_path(&self.path);
-        let mut file = OpenOptions::new()
-            .create(true)
-            .truncate(true)
-            .write(true)
-            .open(&tmp_path)?;
-        {
-            let mut writer = BufWriter::with_capacity(256 * 1024, &mut file);
 
-            // Pass 2: Write Header and Record Table
-            let mut header_prefix = build_header_prefix(
-                &self.metadata.embedder_id,
-                &self.metadata.embedder_revision,
-                self.dimension(),
-                self.quantization(),
-                new_gen,
-                record_count,
-                vectors_offset,
-            )?;
-            let header_crc = crc32(&header_prefix);
-            header_prefix.extend_from_slice(&header_crc.to_le_bytes());
+        // Helper: perform all I/O into tmp_path, rename atomically, and reload.
+        // If anything fails after the temp file is created, we clean it up.
+        let result = (|| -> SearchResult<()> {
+            let mut file = OpenOptions::new()
+                .create(true)
+                .truncate(true)
+                .write(true)
+                .open(&tmp_path)?;
+            {
+                let mut writer = BufWriter::with_capacity(256 * 1024, &mut file);
 
-            writer.write_all(&header_prefix)?;
-            writer.write_all(&record_table)?;
+                // Pass 2: Write Header and Record Table
+                let mut header_prefix = build_header_prefix(
+                    &self.metadata.embedder_id,
+                    &self.metadata.embedder_revision,
+                    self.dimension(),
+                    self.quantization(),
+                    new_gen,
+                    record_count,
+                    vectors_offset,
+                )?;
+                let header_crc = crc32(&header_prefix);
+                header_prefix.extend_from_slice(&header_crc.to_le_bytes());
 
-            // Pass 3: Write String Table
-            for source in sources {
-                let (_, doc_id) = self.resolve_sort_key(source);
-                writer.write_all(doc_id.as_bytes())?;
-            }
+                writer.write_all(&header_prefix)?;
+                writer.write_all(&record_table)?;
 
-            // Padding
-            if padding_len > 0 {
-                writer.write_all(&vec![0u8; padding_len])?;
-            }
+                // Pass 3: Write String Table
+                for source in sources {
+                    let (_, doc_id) = self.resolve_sort_key(source);
+                    writer.write_all(doc_id.as_bytes())?;
+                }
 
-            // Pass 4: Write Vectors
-            match self.quantization() {
-                Quantization::F16 => {
-                    for source in sources {
-                        match source {
-                            MergeSource::Main(idx) => {
-                                // Fast path: copy raw bytes
-                                let start = self.vector_start(*idx)?;
-                                let len = self.dimension() * 2;
-                                let bytes = &self.data[start..start + len];
-                                writer.write_all(bytes)?;
+                // Padding
+                if padding_len > 0 {
+                    writer.write_all(&vec![0u8; padding_len])?;
+                }
+
+                // Pass 4: Write Vectors
+                match self.quantization() {
+                    Quantization::F16 => {
+                        for source in sources {
+                            match source {
+                                MergeSource::Main(idx) => {
+                                    // Fast path: copy raw bytes
+                                    let start = self.vector_start(*idx)?;
+                                    let len = self.dimension() * 2;
+                                    let bytes = &self.data[start..start + len];
+                                    writer.write_all(bytes)?;
+                                }
+                                MergeSource::Wal(idx) => {
+                                    // Slow path: encode
+                                    let entry = &self.wal_entries[*idx];
+                                    for &val in &entry.embedding {
+                                        writer.write_all(&f16::from_f32(val).to_le_bytes())?;
+                                    }
+                                }
                             }
-                            MergeSource::Wal(idx) => {
-                                // Slow path: encode
-                                let entry = &self.wal_entries[*idx];
-                                for &val in &entry.embedding {
-                                    writer.write_all(&f16::from_f32(val).to_le_bytes())?;
+                        }
+                    }
+                    Quantization::F32 => {
+                        for source in sources {
+                            match source {
+                                MergeSource::Main(idx) => {
+                                    // Fast path: copy raw bytes
+                                    let start = self.vector_start(*idx)?;
+                                    let len = self.dimension() * 4;
+                                    let bytes = &self.data[start..start + len];
+                                    writer.write_all(bytes)?;
+                                }
+                                MergeSource::Wal(idx) => {
+                                    // Slow path: encode
+                                    let entry = &self.wal_entries[*idx];
+                                    for &val in &entry.embedding {
+                                        writer.write_all(&val.to_le_bytes())?;
+                                    }
                                 }
                             }
                         }
                     }
                 }
-                Quantization::F32 => {
-                    for source in sources {
-                        match source {
-                            MergeSource::Main(idx) => {
-                                // Fast path: copy raw bytes
-                                let start = self.vector_start(*idx)?;
-                                let len = self.dimension() * 4;
-                                let bytes = &self.data[start..start + len];
-                                writer.write_all(bytes)?;
-                            }
-                            MergeSource::Wal(idx) => {
-                                // Slow path: encode
-                                let entry = &self.wal_entries[*idx];
-                                for &val in &entry.embedding {
-                                    writer.write_all(&val.to_le_bytes())?;
-                                }
-                            }
-                        }
-                    }
+                writer.flush()?;
+            }
+
+            file.sync_all()?;
+            fs::rename(&tmp_path, &self.path)?;
+            sync_parent_directory(&self.path)?;
+            Ok(())
+        })();
+
+        if let Err(e) = &result {
+            // Clean up the temp file on error (best-effort).
+            if tmp_path.exists() {
+                if let Err(cleanup_err) = fs::remove_file(&tmp_path) {
+                    tracing::warn!(
+                        "failed to clean up temp file {} after rewrite error {e}: {cleanup_err}",
+                        tmp_path.display()
+                    );
                 }
             }
-            writer.flush()?;
+            return Err(e.clone());
         }
-
-        file.sync_all()?;
-        fs::rename(&tmp_path, &self.path)?;
-        sync_parent_directory(&self.path)?;
 
         // Reload
         let config = self.wal_config.clone();
