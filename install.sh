@@ -382,14 +382,31 @@ if [ "$FROM_SOURCE" -eq 1 ]; then
     sed -i.bak '/"tools\/optimize_params"/d' "$TMP/src/Cargo.toml"
     rm -f "$TMP/src/Cargo.toml.bak"
   fi
+  # Unset env vars that would redirect cargo output away from the default
+  # target directory.  Without this, users with CARGO_TARGET_DIR or
+  # CARGO_BUILD_TARGET set (common among Rust developers) would see a
+  # successful compile followed by a spurious "Build failed" because the
+  # binary lands in an unexpected location.
   if [ "$LITE" -eq 1 ]; then
     info "Building lite variant (no embedded models)"
-    (cd "$TMP/src" && cargo build --release -p frankensearch-fsfs --no-default-features)
+    (cd "$TMP/src" && unset CARGO_TARGET_DIR CARGO_BUILD_TARGET_DIR CARGO_BUILD_TARGET && cargo build --release -p frankensearch-fsfs --no-default-features)
   else
-    (cd "$TMP/src" && cargo build --release -p frankensearch-fsfs)
+    (cd "$TMP/src" && unset CARGO_TARGET_DIR CARGO_BUILD_TARGET_DIR CARGO_BUILD_TARGET && cargo build --release -p frankensearch-fsfs)
   fi
   BIN="$TMP/src/target/release/${BINARY_NAME}"
-  [ -x "$BIN" ] || { err "Build failed"; exit 1; }
+  if [ ! -x "$BIN" ]; then
+    # Fallback: search for the binary in case a .cargo/config.toml or other
+    # mechanism placed it elsewhere under the source tree.
+    FOUND_BIN=$(find "$TMP/src/target" -maxdepth 4 -type f -name "${BINARY_NAME}" -perm -111 2>/dev/null | head -n 1)
+    if [ -n "$FOUND_BIN" ] && [ -x "$FOUND_BIN" ]; then
+      warn "Binary was not at expected path ($BIN), found at $FOUND_BIN"
+      BIN="$FOUND_BIN"
+    else
+      err "Build succeeded but binary not found at $BIN"
+      err "Check CARGO_TARGET_DIR or .cargo/config.toml target-dir settings"
+      exit 1
+    fi
+  fi
   if [ "$SYSTEM" -eq 1 ]; then
     sudo install -m 0755 "$BIN" "$DEST/${BINARY_NAME}"
   else

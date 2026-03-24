@@ -1852,10 +1852,15 @@ build_from_source() {
   ok "Repository cloned."
 
   # Build the fsfs binary.
+  # Unset env vars that would redirect cargo output away from the default
+  # target directory.  Without this, users with CARGO_TARGET_DIR or
+  # CARGO_BUILD_TARGET set (common among Rust developers) would see a
+  # successful compile followed by "Expected binary not found" because the
+  # binary lands in an unexpected location.
   info "Building frankensearch-fsfs (release mode)..."
   local cargo_args=(build --release -p frankensearch-fsfs)
 
-  if ! (cd "${source_dir}" && cargo "${cargo_args[@]}" 2>&1); then
+  if ! (cd "${source_dir}" && unset CARGO_TARGET_DIR CARGO_BUILD_TARGET_DIR CARGO_BUILD_TARGET && cargo "${cargo_args[@]}" 2>&1); then
     err "Build failed. Common causes:"
     err "  - Missing system dependencies (openssl-dev, pkg-config)"
     err "  - Insufficient memory (need ~4GB RAM)"
@@ -1869,8 +1874,18 @@ build_from_source() {
   built_binary_name="$(binary_filename)"
   local built_binary="${source_dir}/target/release/${built_binary_name}"
   if [[ ! -f "${built_binary}" ]]; then
-    err "Expected binary not found at ${built_binary}"
-    return 1
+    # Fallback: search for the binary in case a .cargo/config.toml or other
+    # mechanism placed it elsewhere under the source tree.
+    local found_binary=""
+    found_binary="$(find "${source_dir}/target" -maxdepth 4 -type f -name "${built_binary_name}" -perm -111 2>/dev/null | head -n 1)"
+    if [[ -n "${found_binary}" && -f "${found_binary}" ]]; then
+      warn "Binary was not at expected path (${built_binary}), found at ${found_binary}"
+      built_binary="${found_binary}"
+    else
+      err "Expected binary not found at ${built_binary}"
+      err "Check CARGO_TARGET_DIR or .cargo/config.toml target-dir settings"
+      return 1
+    fi
   fi
 
   # Stage the binary for installation (same as download path).
