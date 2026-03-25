@@ -718,7 +718,43 @@ impl VectorIndex {
                 .retain(|existing| existing.doc_id != new_entry.doc_id);
         }
         // Add to in-memory entries (immediately searchable).
-        self.wal_entries.extend(wal_entries);
+        self.wal_entries.extend(wal_entries.clone());
+
+        // BEST-EFFORT: Tombstone the old main index entries so they don't pollute the top-K heap.
+        // If this crashes before completing, it's fine; they will be resolved out later (though they might steal a top-K slot temporarily).
+        for entry in &wal_entries {
+            let hash = entry.doc_id_hash;
+            if let Ok(Some(mut index)) = self.find_first_hash_match(hash) {
+                while index > 0 {
+                    if let Ok(prev) = self.record_at(index - 1) {
+                        if prev.doc_id_hash != hash {
+                            break;
+                        }
+                        index -= 1;
+                    } else {
+                        break;
+                    }
+                }
+                for candidate in index..self.record_count() {
+                    if let Ok(rec) = self.record_at(candidate) {
+                        if rec.doc_id_hash != hash {
+                            break;
+                        }
+                        if !is_tombstoned_flags(rec.flags) {
+                            if let Ok(candidate_doc_id) = self.doc_id_at(candidate) {
+                                if candidate_doc_id == entry.doc_id {
+                                    let flags = rec.flags | RECORD_FLAG_TOMBSTONE;
+                                    let _ = self.set_record_flags(candidate, flags);
+                                    break;
+                                }
+                            }
+                        }
+                    } else {
+                        break;
+                    }
+                }
+            }
+        }
 
         debug!(
             target: "frankensearch.index",
