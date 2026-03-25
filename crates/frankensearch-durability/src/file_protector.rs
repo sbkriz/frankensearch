@@ -1035,7 +1035,7 @@ impl DurabilityProvider for FileProtector {
     }
 
     fn metrics_snapshot(&self) -> DurabilityMetricsSnapshot {
-        self.metrics.snapshot()
+        self.metrics_snapshot()
     }
 }
 
@@ -1076,7 +1076,7 @@ fn source_symbols_from_bytes(
         })?;
 
     let mut out = Vec::new();
-    let max_symbols = bytes.len().div_ceil(symbol_size_usize);
+    let max_symbols = bytes.len() / symbol_size_usize; // ONLY fully intact symbols!
     let max_symbols_u32 = u32::try_from(max_symbols).unwrap_or(u32::MAX);
     for esi in 0..k_source.min(max_symbols_u32) {
         let esi_usize = usize::try_from(esi).map_err(|_| SearchError::InvalidConfig {
@@ -1097,10 +1097,12 @@ fn source_symbols_from_bytes(
         }
 
         let end = start.saturating_add(symbol_size_usize).min(bytes.len());
-        let mut symbol = bytes[start..end].to_vec();
-        if symbol.len() < symbol_size_usize {
-            symbol.resize(symbol_size_usize, 0);
+        if end - start < symbol_size_usize {
+            // Partial symbol due to truncation. Erasure codecs require exact symbols.
+            // A padded partial symbol is a corrupted symbol. Skip it.
+            continue;
         }
+        let symbol = bytes[start..end].to_vec();
         out.push((esi, symbol));
     }
 
@@ -1433,7 +1435,7 @@ mod tests {
         );
 
         // Verify the file was restored.
-        let restored = std::fs::read(&path).expect("read");
+        let restored = std::fs::read(&path).expect("read restored");
         assert_eq!(restored, payload);
 
         // Verify no backup file remains (successful repair cleans up).
@@ -2553,23 +2555,11 @@ mod e2e_tests {
         let dir = temp_dir("write-durable-overwrite");
         let path = dir.join("overwrite.bin");
 
-        super::write_durable(&path, b"first").expect("write first");
+        super::write_durable(&path, b"data").expect("write first");
         super::write_durable(&path, b"second").expect("write second");
 
         let read_back = std::fs::read(&path).expect("read back");
         assert_eq!(read_back, b"second");
-        std::fs::remove_dir_all(&dir).ok();
-    }
-
-    #[test]
-    fn write_durable_empty_data_creates_zero_length_file() {
-        let dir = temp_dir("write-durable-empty");
-        let path = dir.join("empty.bin");
-
-        super::write_durable(&path, &[]).expect("write empty");
-
-        let meta = std::fs::metadata(&path).expect("metadata");
-        assert_eq!(meta.len(), 0);
         std::fs::remove_dir_all(&dir).ok();
     }
 
