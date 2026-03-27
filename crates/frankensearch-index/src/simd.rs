@@ -120,7 +120,7 @@ pub fn dot_product_f16_bytes_f32(stored_bytes: &[u8], query: &[f32]) -> SearchRe
     for index in (chunks * 8)..dim {
         let b = &stored_bytes[index * 2..];
         let val = f16::from_le_bytes([b[0], b[1]]).to_f32();
-        result += val * query[index];
+        result = val.mul_add(query[index], result);
     }
 
     Ok(result)
@@ -173,7 +173,7 @@ pub fn dot_product_f32_bytes_f32(stored_bytes: &[u8], query: &[f32]) -> SearchRe
     for index in (chunks * 8)..dim {
         let b = &stored_bytes[index * 4..];
         let val = f32::from_le_bytes([b[0], b[1], b[2], b[3]]);
-        result += val * query[index];
+        result = val.mul_add(query[index], result);
     }
 
     Ok(result)
