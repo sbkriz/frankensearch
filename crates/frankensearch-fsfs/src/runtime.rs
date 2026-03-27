@@ -16224,7 +16224,10 @@ mod tests {
             let (resolved_file, rel_key) = pipeline
                 .resolve_paths(&canonical_file.display().to_string())
                 .expect("canonical watcher path should remain within target root");
-            assert_eq!(resolved_file, canonical_file);
+            assert_eq!(
+                resolved_file,
+                fs::canonicalize(&canonical_file).expect("canonicalize file")
+            );
             assert_eq!(rel_key, "src/main.rs");
         });
     }
@@ -16233,12 +16236,13 @@ mod tests {
     fn live_ingest_upsert_binary_file_deletes_stale_document() {
         run_test_with_cx(|cx| async move {
             let temp = tempfile::tempdir().expect("tempdir");
-            let target_root = temp.path().join("project");
+            let temp_root = fs::canonicalize(temp.path()).expect("canonicalize tempdir");
+            let target_root = temp_root.join("project");
             fs::create_dir_all(target_root.join("src")).expect("target root");
             let binary_path = target_root.join("src/blob.bin");
             fs::write(&binary_path, [0_u8, 42, 7, 9]).expect("write binary fixture");
 
-            let index_root = temp.path().join("index");
+            let index_root = temp_root.join("index");
             fs::create_dir_all(index_root.join("vector")).expect("vector dir");
             let lexical_path = index_root.join("lexical");
             let vector_path = index_root.join(super::FSFS_VECTOR_INDEX_FILE);
@@ -16313,7 +16317,8 @@ mod tests {
     fn live_ingest_upsert_lexical_only_reindexes_lexical_and_prunes_vector() {
         run_test_with_cx(|cx| async move {
             let temp = tempfile::tempdir().expect("tempdir");
-            let target_root = temp.path().join("project");
+            let temp_root = fs::canonicalize(temp.path()).expect("canonicalize tempdir");
+            let target_root = temp_root.join("project");
             fs::create_dir_all(target_root.join("src")).expect("target root");
             let file_path = target_root.join("src/lexical_only.md");
             fs::write(
@@ -16322,7 +16327,7 @@ mod tests {
             )
             .expect("write lexical fixture");
 
-            let index_root = temp.path().join("index");
+            let index_root = temp_root.join("index");
             fs::create_dir_all(index_root.join("vector")).expect("vector dir");
             let lexical_path = index_root.join("lexical");
             let vector_path = index_root.join(super::FSFS_VECTOR_INDEX_FILE);
@@ -16390,12 +16395,13 @@ mod tests {
     fn live_ingest_upsert_metadata_only_prunes_lexical_and_vector_entries() {
         run_test_with_cx(|cx| async move {
             let temp = tempfile::tempdir().expect("tempdir");
-            let target_root = temp.path().join("project");
+            let temp_root = fs::canonicalize(temp.path()).expect("canonicalize tempdir");
+            let target_root = temp_root.join("project");
             fs::create_dir_all(target_root.join("src")).expect("target root");
             let file_path = target_root.join("src/meta.json");
             fs::write(&file_path, "{\"meta\":true}\n").expect("write metadata fixture");
 
-            let index_root = temp.path().join("index");
+            let index_root = temp_root.join("index");
             fs::create_dir_all(index_root.join("vector")).expect("vector dir");
             let lexical_path = index_root.join("lexical");
             let vector_path = index_root.join(super::FSFS_VECTOR_INDEX_FILE);
@@ -16885,11 +16891,14 @@ mod tests {
             let project = temp.path().join("project");
             std::fs::create_dir_all(&project).unwrap();
 
-            let runtime = FsfsRuntime::new(FsfsConfig::default()).with_cli_input(CliInput {
+            let mut config = FsfsConfig::default();
+            config.storage.index_dir = temp.path().join(".frankensearch").display().to_string();
+            let runtime = FsfsRuntime::new(config).with_cli_input(CliInput {
                 command: CliCommand::Search,
                 query: Some("auth".to_owned()),
                 filter: Some("owner:me".to_owned()),
                 target_path: Some(project),
+                index_dir: Some(temp.path().join(".frankensearch")),
                 ..CliInput::default()
             });
 
@@ -17088,9 +17097,13 @@ mod tests {
     #[test]
     fn runtime_search_payload_empty_query_returns_empty_results() {
         run_test_with_cx(|cx| async move {
-            let runtime = FsfsRuntime::new(FsfsConfig::default()).with_cli_input(CliInput {
+            let temp = tempfile::tempdir().expect("tempdir");
+            let mut config = FsfsConfig::default();
+            config.storage.index_dir = temp.path().join(".frankensearch").display().to_string();
+            let runtime = FsfsRuntime::new(config).with_cli_input(CliInput {
                 command: CliCommand::Search,
                 query: Some("   ".to_owned()),
+                index_dir: Some(temp.path().join(".frankensearch")),
                 ..CliInput::default()
             });
 
@@ -17930,7 +17943,8 @@ mod tests {
         let binary = dir.join("fsfs");
         fs::write(&binary, b"#!/bin/sh\necho test").unwrap();
         let found = super::find_extracted_binary(&dir, "fsfs").unwrap();
-        assert_eq!(found, binary);
+        let expected = fs::canonicalize(&binary).unwrap();
+        assert_eq!(found, expected);
         let _ = fs::remove_dir_all(&dir);
     }
 
@@ -17942,7 +17956,8 @@ mod tests {
         let binary = sub.join("fsfs");
         fs::write(&binary, b"#!/bin/sh\necho test").unwrap();
         let found = super::find_extracted_binary(&dir, "fsfs").unwrap();
-        assert_eq!(found, binary);
+        let expected = fs::canonicalize(&binary).unwrap();
+        assert_eq!(found, expected);
         let _ = fs::remove_dir_all(&dir);
     }
 
