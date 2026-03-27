@@ -543,7 +543,7 @@ fn build_ranking_equation(ranking: &RankingExplanation) -> String {
     if parts.is_empty() {
         return format!("score = {:.6}", ranking.final_score);
     }
-    format!("score = {} = {:.6}", parts.join(" + "), ranking.final_score,)
+    format!("score = {} = {:.6}", parts.join(" + "), ranking.final_score)
 }
 
 const fn format_rank_placeholder(source: ScoreComponentSource) -> &'static str {

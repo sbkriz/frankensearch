@@ -241,5 +241,5 @@ fn report(name: &str, value: f64, unit: &str, budget: f64) {
     } else {
         "\x1b[33mSLOW\x1b[0m"
     };
-    println!("  [{status}] {name:<35} {value:>10.1} {unit:<6} (budget: {budget:.1} {unit})",);
+    println!("  [{status}] {name:<35} {value:>10.1} {unit:<6} (budget: {budget:.1} {unit})");
 }

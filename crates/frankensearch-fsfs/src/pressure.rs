@@ -1176,7 +1176,9 @@ pub struct ProcIoCounters {
 /// Linux host pressure collector backed by `/proc`.
 #[derive(Debug)]
 pub struct HostPressureCollector {
+    #[allow(dead_code)] // Only read on Linux via /proc
     io_ceiling_mib_per_sec: f64,
+    #[allow(dead_code)] // Only read on Linux via /proc
     previous_io: Option<ProcIoCounters>,
     #[cfg(not(target_os = "linux"))]
     system: System,

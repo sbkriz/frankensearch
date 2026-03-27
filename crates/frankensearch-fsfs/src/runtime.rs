@@ -9850,7 +9850,7 @@ impl FsfsRuntime {
                                 }
                             }
                         },
-                        Event::Paste(_) => {
+                        _ => {
                             if state.query_input.handle_event(&event) {
                                 state.active_hit_index = 0;
                                 state.context_scroll = 0;
@@ -9858,7 +9858,6 @@ impl FsfsRuntime {
                                 interaction_changed = true;
                             }
                         }
-                        _ => {}
                     }
                 } else if let Event::Key(key) = &event {
                     match (key.code, key.modifiers) {

@@ -138,8 +138,9 @@ unsafe_code = "deny"
 pedantic = { level = "warn", priority = -1 }
 nursery = { level = "warn", priority = -1 }
 # ── Nightly-unstable pedantic/nursery lints that churn CI ──
-# Nightly clippy adds new collapsible_if patterns (let-chains) that churn CI.
+# Nightly clippy adds new collapsible_if/match patterns (let-chains) that churn CI.
 collapsible_if = "allow"
+collapsible_match = "allow"
 # Nightly const-eval expansion causes false positives on match-based fns.
 missing_const_for_fn = "allow"
 # Function length is a design judgement; enforcing in CI is too noisy.

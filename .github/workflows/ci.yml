@@ -97,7 +97,7 @@ jobs:
         run: cargo check -p frankensearch-fsfs --no-default-features
 
       - name: cargo clippy
-        run: cargo clippy --workspace --all-targets --exclude fastcma -- -D warnings
+        run: cargo clippy --workspace --all-targets --exclude optimize-params -- -D warnings
 
       - name: cargo fmt --check
         run: cargo fmt --check
