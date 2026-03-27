@@ -392,6 +392,7 @@ fn scenario_cli_chaos_symlink_loop() {
 }
 
 #[test]
+#[cfg(target_os = "linux")] // mount boundary detection requires /proc/mounts
 fn scenario_cli_chaos_mount_boundary() {
     assert_bundle_matches_reason(
         "cli-chaos-mount-boundary",
@@ -447,6 +448,7 @@ fn scenario_cli_chaos_symlink_loop_binary_run() {
 }
 
 #[test]
+#[cfg(target_os = "linux")] // mount boundary detection requires /proc/mounts
 fn scenario_cli_chaos_mount_boundary_binary_run() {
     assert_binary_chaos_result(
         "cli-chaos-mount-boundary",

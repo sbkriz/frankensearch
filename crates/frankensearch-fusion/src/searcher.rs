@@ -601,7 +601,7 @@ impl TwoTierSearcher {
                             semantic_query,
                             query_class,
                             SearchEventPhase::RefinementFailed,
-                            initial_hits.len(),
+                            display_hits.len(),
                             metrics.lexical_candidates,
                             metrics.semantic_candidates,
                             phase2_latency,
@@ -708,7 +708,7 @@ impl TwoTierSearcher {
                                 semantic_query,
                                 query_class,
                                 SearchEventPhase::RefinementFailed,
-                                initial_hits.len(),
+                                display_hits.len(),
                                 metrics.lexical_candidates,
                                 metrics.semantic_candidates,
                                 phase2_latency,
@@ -1235,10 +1235,12 @@ impl TwoTierSearcher {
                 let initial = initial_by_doc.get(hit.doc_id.as_str()).copied();
                 let fast_score = fast_scores_by_doc.get(hit.doc_id.as_str()).copied();
                 let quality_score = quality_scores_by_doc.get(hit.doc_id.as_str()).copied();
-                let source = if quality_score.is_some() {
+                let original_source =
+                    initial.map_or(ScoreSource::SemanticFast, |result| result.source);
+                let source = if quality_score.is_some() && original_source != ScoreSource::Lexical {
                     ScoreSource::SemanticQuality
                 } else {
-                    initial.map_or(ScoreSource::SemanticFast, |result| result.source)
+                    original_source
                 };
 
                 let explanation = if self.config.explain {
@@ -4828,11 +4830,17 @@ mod tests {
     #[test]
     fn next_telemetry_identifier_is_uppercase_crockford_base32() {
         let id = next_telemetry_identifier("evt");
-        assert_eq!(id.len(), 26, "ULID identifiers are 26 chars");
+        // "evt_" prefix (4 chars) + 26 ULID chars = 30
+        assert_eq!(
+            id.len(),
+            30,
+            "prefixed ULID: 4-char prefix + 26-char ULID body"
+        );
+        let body = &id["evt_".len()..];
         assert!(
-            id.chars()
+            body.chars()
                 .all(|ch| ch.is_ascii_uppercase() || ch.is_ascii_digit()),
-            "generated identifier should use uppercase Crockford base32"
+            "ULID body should use uppercase Crockford base32"
         );
     }
 
