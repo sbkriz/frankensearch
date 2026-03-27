@@ -16891,14 +16891,17 @@ mod tests {
             let project = temp.path().join("project");
             std::fs::create_dir_all(&project).unwrap();
 
+            let index_dir = temp.path().join(".frankensearch");
+            let lexical_path = index_dir.join("lexical");
+            let _lexical = TantivyIndex::create(&lexical_path).expect("create lexical index");
             let mut config = FsfsConfig::default();
-            config.storage.index_dir = temp.path().join(".frankensearch").display().to_string();
+            config.storage.index_dir = index_dir.display().to_string();
             let runtime = FsfsRuntime::new(config).with_cli_input(CliInput {
                 command: CliCommand::Search,
                 query: Some("auth".to_owned()),
                 filter: Some("owner:me".to_owned()),
                 target_path: Some(project),
-                index_dir: Some(temp.path().join(".frankensearch")),
+                index_dir: Some(index_dir),
                 ..CliInput::default()
             });
 
@@ -17098,12 +17101,15 @@ mod tests {
     fn runtime_search_payload_empty_query_returns_empty_results() {
         run_test_with_cx(|cx| async move {
             let temp = tempfile::tempdir().expect("tempdir");
+            let index_dir = temp.path().join(".frankensearch");
+            let lexical_path = index_dir.join("lexical");
+            let _lexical = TantivyIndex::create(&lexical_path).expect("create lexical index");
             let mut config = FsfsConfig::default();
-            config.storage.index_dir = temp.path().join(".frankensearch").display().to_string();
+            config.storage.index_dir = index_dir.display().to_string();
             let runtime = FsfsRuntime::new(config).with_cli_input(CliInput {
                 command: CliCommand::Search,
                 query: Some("   ".to_owned()),
-                index_dir: Some(temp.path().join(".frankensearch")),
+                index_dir: Some(index_dir),
                 ..CliInput::default()
             });
 
