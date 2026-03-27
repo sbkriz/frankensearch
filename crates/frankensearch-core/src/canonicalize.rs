@@ -217,17 +217,14 @@ fn strip_markdown_links(text: &str) -> String {
             for inner in chars.by_ref() {
                 if inner == '[' {
                     bracket_depth += 1;
-                    link_text.push(inner);
                 } else if inner == ']' {
                     bracket_depth -= 1;
                     if bracket_depth == 0 {
                         found_close = true;
                         break;
                     }
-                    link_text.push(inner);
-                } else {
-                    link_text.push(inner);
                 }
+                link_text.push(inner);
             }
 
             if found_close && chars.peek() == Some(&'(') {
@@ -356,12 +353,10 @@ fn filter_low_signal(text: &str) -> String {
 
 /// Truncate string to at most N characters, respecting char boundaries.
 fn truncate_to_chars(text: &str, max_chars: usize) -> String {
-    let mut count = 0;
-    for (idx, _) in text.char_indices() {
+    for (count, (idx, _)) in text.char_indices().enumerate() {
         if count == max_chars {
             return text[..idx].to_owned();
         }
-        count += 1;
     }
     text.to_owned()
 }

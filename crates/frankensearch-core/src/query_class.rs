@@ -79,10 +79,10 @@ impl QueryClass {
             if s.contains('_') {
                 return true;
             }
-            let has_lower = s.chars().any(|c| c.is_lowercase());
-            let has_upper = s.chars().any(|c| c.is_uppercase());
-            let first_upper = s.chars().next().is_some_and(|c| c.is_uppercase());
-            let rest_lower = s.chars().skip(1).all(|c| c.is_lowercase());
+            let has_lower = s.chars().any(char::is_lowercase);
+            let has_upper = s.chars().any(char::is_uppercase);
+            let first_upper = s.chars().next().is_some_and(char::is_uppercase);
+            let rest_lower = s.chars().skip(1).all(char::is_lowercase);
             if has_lower && has_upper && !(first_upper && rest_lower) {
                 return true;
             }

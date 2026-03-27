@@ -1,14 +1,14 @@
 //! LLM-powered query expansion for fsfs search.
 //!
 //! When the `--expand` flag is set, this module generates additional query
-//! variants using an LLM backend (Anthropic Claude or OpenAI) and returns
+//! variants using an LLM backend (Anthropic Claude or `OpenAI`) and returns
 //! them for parallel search execution. Results from all queries are later
 //! merged via reciprocal rank fusion in the main search pipeline.
 //!
 //! Expansion strategies:
 //! - **Keyword**: extract key terms and add synonyms/related terms
 //! - **Semantic**: rephrase the query for semantic matching
-//! - **HyDE**: generate a hypothetical answer snippet
+//! - **`HyDE`**: generate a hypothetical answer snippet
 //!
 //! The feature is entirely optional and off by default.
 
@@ -221,7 +221,7 @@ fn call_anthropic(api_key: &str, prompt: &str) -> Result<String, String> {
         .ok_or_else(|| "Anthropic response contained no text content".to_owned())
 }
 
-/// Call the OpenAI Chat Completions API with gpt-4o-mini.
+/// Call the `OpenAI` Chat Completions API with gpt-4o-mini.
 fn call_openai(api_key: &str, prompt: &str) -> Result<String, String> {
     let body = serde_json::json!({
         "model": "gpt-4o-mini",

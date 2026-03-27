@@ -11,7 +11,7 @@ categories = ["command-line-utilities", "text-processing", "development-tools"]
 
 [features]
 default = ["embedded-models"]
-embedded-models = ["frankensearch-embed/bundled-default-models"]
+embedded-models = ["frankensearch-embed/bundled-default-models", "frankensearch-embed/model2vec", "frankensearch-embed/fastembed"]
 vendored-openssl = ["openssl"]
 
 [lib]
@@ -23,7 +23,7 @@ path = "src/main.rs"
 
 [dependencies]
 frankensearch-core = { workspace = true }
-frankensearch-embed = { workspace = true, default-features = false, features = ["hash", "model2vec", "fastembed", "download"] }
+frankensearch-embed = { workspace = true, default-features = false, features = ["hash", "download"] }
 frankensearch-index = { workspace = true }
 frankensearch-lexical = { workspace = true }
 frankensearch-storage = { workspace = true }

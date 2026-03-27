@@ -374,7 +374,7 @@ impl StorageBackedJobRunner {
 
             let fast_needs_enqueue = fast_dedup.state != DedupState::Unchanged;
             let quality_needs_enqueue =
-                quality_dedup.map_or(false, |q| q.state != DedupState::Unchanged);
+                quality_dedup.is_some_and(|q| q.state != DedupState::Unchanged);
 
             if !fast_needs_enqueue && !quality_needs_enqueue {
                 upsert_document(conn, &document)?;
@@ -414,8 +414,7 @@ impl StorageBackedJobRunner {
 
             let _ = record_content_hash(conn, &content_hash_hex, &request.doc_id, now_ms)?;
 
-            let mut fast_job_enqueued = false;
-            if fast_needs_enqueue {
+            let fast_job_enqueued = if fast_needs_enqueue {
                 let fast_request = EnqueueRequest::new(
                     request.doc_id.clone(),
                     fast_embedder_id.clone(),
@@ -424,11 +423,13 @@ impl StorageBackedJobRunner {
                 );
                 let fast_outcome =
                     enqueue_inner(conn, &fast_request, now_ms, self.queue.config().max_retries)?;
-                fast_job_enqueued = matches!(
+                matches!(
                     fast_outcome,
                     EnqueueOutcome::Inserted | EnqueueOutcome::Replaced
-                );
-            }
+                )
+            } else {
+                false
+            };
 
             let mut quality_job_enqueued = false;
             if quality_needs_enqueue {

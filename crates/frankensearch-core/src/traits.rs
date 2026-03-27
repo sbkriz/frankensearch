@@ -37,7 +37,7 @@ pub enum ModelCategory {
     StaticEmbedder,
     /// Transformer inference (MiniLM/BGE): highest quality but slower.
     TransformerEmbedder,
-    /// Cloud API embeddings (OpenAI, Gemini): high quality, network-dependent latency.
+    /// Cloud API embeddings (`OpenAI`, Gemini): high quality, network-dependent latency.
     ApiEmbedder,
 }
 

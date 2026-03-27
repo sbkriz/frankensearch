@@ -1557,8 +1557,8 @@ mod tests {
         let hits = index.search_top_k(&[1.0, 0.0], 1, None).unwrap();
 
         assert_eq!(hits.len(), 1);
-        assert_eq!(
-            hits[0].score, 0.0,
+        assert!(
+            hits[0].score.abs() < f32::EPSILON,
             "Expected score 0.0 from WAL entry, but got leaked score {}",
             hits[0].score
         );

@@ -1697,6 +1697,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(target_os = "linux")]
     fn parse_proc_io_extracts_read_and_write_bytes() {
         let parsed = parse_proc_self_io(
             "rchar: 12\nwchar: 15\nsyscr: 2\nsyscw: 3\nread_bytes: 4096\nwrite_bytes: 8192\n",
@@ -1707,12 +1708,14 @@ mod tests {
     }
 
     #[test]
+    #[cfg(target_os = "linux")]
     fn parse_proc_io_rejects_missing_fields() {
         let err = parse_proc_self_io("read_bytes: 100\n").expect_err("missing write_bytes");
         assert!(matches!(err, SearchError::InvalidConfig { .. }));
     }
 
     #[test]
+    #[cfg(target_os = "linux")]
     fn parse_self_status_rss_converts_kb_to_mb() {
         let parsed = parse_self_status_rss_mb("Name:\tfsfs\nVmRSS:\t2048 kB\n").expect("rss parse");
         assert_eq!(parsed, 2);
@@ -2281,13 +2284,11 @@ mod tests {
 
     #[test]
     fn io_pct_zero_elapsed_returns_zero() {
-        let c = HostPressureCollector {
-            io_ceiling_mib_per_sec: 64.0,
-            previous_io: Some(ProcIoCounters {
-                read_bytes: 0,
-                write_bytes: 0,
-            }),
-        };
+        let mut c = HostPressureCollector::new(64.0).expect("valid config");
+        c.previous_io = Some(ProcIoCounters {
+            read_bytes: 0,
+            write_bytes: 0,
+        });
         let current = ProcIoCounters {
             read_bytes: 1_000_000,
             write_bytes: 1_000_000,
@@ -2298,18 +2299,21 @@ mod tests {
     // --- parse functions ---
 
     #[test]
+    #[cfg(target_os = "linux")]
     fn parse_proc_self_io_missing_read_bytes() {
         let err = parse_proc_self_io("write_bytes: 100\n").unwrap_err();
         assert!(matches!(err, SearchError::InvalidConfig { .. }));
     }
 
     #[test]
+    #[cfg(target_os = "linux")]
     fn parse_proc_self_io_invalid_value() {
         let err = parse_proc_self_io("read_bytes: abc\nwrite_bytes: 100\n").unwrap_err();
         assert!(matches!(err, SearchError::InvalidConfig { .. }));
     }
 
     #[test]
+    #[cfg(target_os = "linux")]
     fn parse_self_status_rss_missing_vmrss() {
         let err = parse_self_status_rss_mb("Name:\tfsfs\nVmSize:\t1000 kB\n").unwrap_err();
         assert!(matches!(err, SearchError::InvalidConfig { .. }));
@@ -2628,13 +2632,11 @@ mod tests {
 
     #[test]
     fn io_pct_is_derived_from_byte_delta_and_interval() {
-        let collector = HostPressureCollector {
-            io_ceiling_mib_per_sec: 10.0,
-            previous_io: Some(ProcIoCounters {
-                read_bytes: 0,
-                write_bytes: 0,
-            }),
-        };
+        let mut collector = HostPressureCollector::new(10.0).expect("valid config");
+        collector.previous_io = Some(ProcIoCounters {
+            read_bytes: 0,
+            write_bytes: 0,
+        });
         let current = ProcIoCounters {
             read_bytes: 5 * 1024 * 1024,
             write_bytes: 5 * 1024 * 1024,

@@ -30,10 +30,11 @@ fn normalize(values: Vec<f32>) -> Vec<f32> {
     values.into_iter().map(|v| v / norm).collect()
 }
 
+#[allow(clippy::cast_precision_loss)]
 fn make_vector(dim: usize, seed: f32) -> Vec<f32> {
     normalize(
         (0..dim)
-            .map(|i| (seed + i as f32 * 0.17).sin())
+            .map(|i| (i as f32).mul_add(0.17, seed).sin())
             .collect::<Vec<_>>(),
     )
 }
@@ -59,6 +60,7 @@ fn from_fsvi_matches_file_backed_top_k() {
     .expect("create fsvi writer");
 
     for idx in 0..doc_count {
+        #[allow(clippy::cast_precision_loss)]
         let vec = make_vector(dim, idx as f32 * 0.37);
         writer
             .write_record(&format!("doc-{idx}"), &vec)
@@ -161,7 +163,7 @@ fn f16_scores_track_f32_reference_within_tolerance() {
 fn empty_and_single_vector_behave_safely() {
     let empty = InMemoryVectorIndex::from_vectors(Vec::new(), Vec::new(), 8).expect("empty index");
     let empty_hits = empty
-        .search_top_k(&vec![0.0; 8], 5, None)
+        .search_top_k(&[0.0; 8], 5, None)
         .expect("empty search");
     assert!(empty_hits.is_empty());
 
@@ -183,9 +185,10 @@ fn parallel_scan_matches_sequential_scan() {
     let dim = 32;
     let count = 6000usize;
     let doc_ids = (0..count).map(|i| format!("doc-{i}")).collect::<Vec<_>>();
-    let vectors = (0..count)
+    #[allow(clippy::cast_precision_loss)]
+    let vectors: Vec<_> = (0..count)
         .map(|i| make_vector(dim, i as f32 * 0.13))
-        .collect::<Vec<_>>();
+        .collect();
     let query = make_vector(dim, 31.4);
     let index = InMemoryVectorIndex::from_vectors(doc_ids, vectors, dim).expect("index");
 

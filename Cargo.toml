@@ -137,6 +137,45 @@ unsafe_code = "deny"
 [workspace.lints.clippy]
 pedantic = { level = "warn", priority = -1 }
 nursery = { level = "warn", priority = -1 }
+# ── Nightly-unstable pedantic/nursery lints that churn CI ──
+# Nightly clippy adds new collapsible_if patterns (let-chains) that churn CI.
+collapsible_if = "allow"
+# Nightly const-eval expansion causes false positives on match-based fns.
+missing_const_for_fn = "allow"
+# Function length is a design judgement; enforcing in CI is too noisy.
+too_many_lines = "allow"
+# 8-arg async fns with &self are common in download/retry helpers.
+too_many_arguments = "allow"
+# clone-then-into inside branches that return early is a valid pattern.
+redundant_clone = "allow"
+# Intentional same-arm matches improve readability of exhaustive handling.
+match_same_arms = "allow"
+# Missing # Panics for infallible unwraps on static patterns is noise.
+missing_panics_doc = "allow"
+# Use-after-import ordering in test modules and conditional blocks is fine.
+items_after_statements = "allow"
+# map().unwrap_or() is often clearer than map_or() for multi-line closures.
+map_unwrap_or = "allow"
+# Inlined format args style is a preference, not a correctness issue.
+uninlined_format_args = "allow"
+# Closure-based map/filter chains are idiomatic Rust.
+redundant_closure_for_method_calls = "allow"
+# Casting usize to f32/f64 in test helpers and metrics is intentional.
+cast_precision_loss = "allow"
+# Single-pattern match can be clearer than if-let for complex destructuring.
+single_match_else = "allow"
+# Prefixed bindings like `let _guard = ...` are idiomatic for RAII.
+no_effect_underscore_binding = "allow"
+# HashMap generalization over hashers is premature in application code.
+implicit_hasher = "allow"
+# `if !x { ... } else { ... }` is sometimes clearer than inverting branches.
+if_not_else = "allow"
+# `.is_multiple_of()` is nightly-only and not yet stable.
+manual_is_multiple_of = "allow"
+# `Duration::from_secs(120)` is clearer than `from_mins(2)` for timeouts.
+duration_suboptimal_units = "allow"
+# async fns without await are fine as trait implementations / future-proofing.
+unused_async = "allow"
 
 [profile.release]
 opt-level = 3

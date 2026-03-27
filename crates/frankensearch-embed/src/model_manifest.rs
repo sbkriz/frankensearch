@@ -78,7 +78,7 @@ impl ModelFile {
     /// Get the local filename (basename) for saving.
     ///
     /// For paths like `"onnx/model.onnx"`, returns `"model.onnx"`.
-    /// This handles HuggingFace repos that restructure files into subdirectories.
+    /// This handles `HuggingFace` repos that restructure files into subdirectories.
     #[must_use]
     pub fn local_name(&self) -> &str {
         self.name.rsplit('/').next().unwrap_or(&self.name)
@@ -339,7 +339,7 @@ impl ModelManifest {
     /// Snowflake Arctic Embed S manifest.
     ///
     /// Dimension: 384. Small, fast model with MiniLM-compatible dimension.
-    /// Verified checksums from HuggingFace.
+    /// Verified checksums from `HuggingFace`.
     #[must_use]
     pub fn snowflake_arctic_s() -> Self {
         const REVISION: &str = "e596f507467533e48a2e17c007f0e1dacc837b33";
@@ -400,7 +400,7 @@ impl ModelManifest {
     /// Nomic Embed Text v1.5 manifest.
     ///
     /// Dimension: 768. Long context support with Matryoshka embedding capability.
-    /// Verified checksums from HuggingFace.
+    /// Verified checksums from `HuggingFace`.
     #[must_use]
     pub fn nomic_embed() -> Self {
         const REVISION: &str = "e5cf08aadaa33385f5990def41f7a23405aec398";
@@ -460,7 +460,7 @@ impl ModelManifest {
 
     /// Jina Reranker v1 Turbo EN manifest.
     ///
-    /// Fast, optimized for English. Verified checksums from HuggingFace.
+    /// Fast, optimized for English. Verified checksums from `HuggingFace`.
     #[must_use]
     pub fn jina_reranker_turbo() -> Self {
         const REVISION: &str = "b8c14f4e723d9e0aab4732a7b7b93741eeeb77c2";
@@ -647,7 +647,7 @@ impl ModelManifest {
         self.total_size_bytes()
     }
 
-    /// HuggingFace download URL for a specific file in this manifest.
+    /// `HuggingFace` download URL for a specific file in this manifest.
     #[must_use]
     pub fn download_url(&self, file: &ModelFile) -> String {
         file.download_url(&self.repo, &self.revision)

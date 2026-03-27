@@ -528,12 +528,13 @@ impl VectorIndex {
             .cloned()
             .collect();
 
-        let mut prev_wal = Vec::new();
-        if filtered.len() < original_wal_len {
+        let prev_wal = if filtered.len() < original_wal_len {
             deleted += original_wal_len - filtered.len();
             wal_changed = true;
-            prev_wal = std::mem::replace(&mut self.wal_entries, filtered);
-        }
+            std::mem::replace(&mut self.wal_entries, filtered)
+        } else {
+            Vec::new()
+        };
 
         // 3. Rewrite WAL sidecar once if anything was removed.
         if wal_changed {
