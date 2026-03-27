@@ -686,11 +686,14 @@ fn insert_candidate(heap: &mut BinaryHeap<HeapEntry>, candidate: HeapEntry, limi
         heap.push(candidate);
         return;
     }
-    if let Some(&worst) = heap.peek()
-        && candidate_is_better(candidate, worst)
+    // Use peek_mut: replacing-in-place triggers a single sift-down on drop,
+    // vs pop() + push() which does sift-up then sift-down (2 sift ops).
+    // This is called for every vector in the index, so the savings compound.
+    if let Some(mut worst) = heap.peek_mut()
+        && candidate_is_better(candidate, *worst)
     {
-        let _ = heap.pop();
-        heap.push(candidate);
+        *worst = candidate;
+        // PeekMut::drop auto-sifts to restore heap invariant.
     }
 }
 
@@ -698,18 +701,30 @@ fn merge_partial_heaps(
     partial_heaps: Vec<BinaryHeap<HeapEntry>>,
     limit: usize,
 ) -> BinaryHeap<HeapEntry> {
-    let mut total_elements = 0_usize;
-    for heap in &partial_heaps {
-        total_elements = total_elements.saturating_add(heap.len());
+    // Instead of inserting one-by-one into a merged heap (O(N log k) with
+    // 2-sift overhead per insert), drain all partial heaps into a flat vec,
+    // partial-sort to find the top-k, then heapify only those winners.
+    let total_elements: usize = partial_heaps.iter().map(BinaryHeap::len).sum();
+    if total_elements == 0 || limit == 0 {
+        return BinaryHeap::new();
     }
-    let capacity = limit.min(total_elements).saturating_add(1);
-    let mut merged = BinaryHeap::with_capacity(capacity);
+
+    let mut all: Vec<HeapEntry> = Vec::with_capacity(total_elements);
     for heap in partial_heaps {
-        for entry in heap {
-            insert_candidate(&mut merged, entry, limit);
-        }
+        all.extend(heap);
     }
-    merged
+
+    // If we need all elements, just heapify.
+    if limit >= all.len() {
+        return BinaryHeap::from(all);
+    }
+
+    // Partial sort: O(N) to partition around the k-th best element,
+    // then heapify only the top-k winners.
+    let k = limit.min(all.len());
+    all.select_nth_unstable_by(k - 1, compare_best_first);
+    all.truncate(k);
+    BinaryHeap::from(all)
 }
 
 fn parallel_search_enabled() -> bool {
