@@ -604,7 +604,6 @@ async fn build_interaction_e2e_artifacts(
     let ts = "2026-02-14T00:00:00Z";
 
     let mut event_seq = 1u64;
-    let mut replay_seq = 1u64;
     let mut events = Vec::new();
     let mut replay = Vec::new();
     let mut lane_reports = Vec::new();
@@ -632,7 +631,7 @@ async fn build_interaction_e2e_artifacts(
         None,
     );
 
-    for lane in &selected_lanes {
+    for (replay_seq, lane) in (1u64..).zip(selected_lanes.iter()) {
         let (mut report, template) = run_template_driven_test(cx, lane.id).await;
         if forced_failure_lane == Some(lane.id) {
             report.add(OracleVerdict::fail(
@@ -671,8 +670,6 @@ async fn build_interaction_e2e_artifacts(
                 }),
             },
         ));
-        replay_seq += 1;
-
         let mut lane_metrics = BTreeMap::new();
         lane_metrics.insert(
             "query_count".to_owned(),
