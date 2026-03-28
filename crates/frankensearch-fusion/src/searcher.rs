@@ -1193,15 +1193,15 @@ impl TwoTierSearcher {
         }
         self.maybe_update_adaptive_conformal(tau);
 
-        let initial_by_doc: HashMap<&str, &ScoredResult> = initial_results
+        let initial_by_doc: AHashMap<&str, &ScoredResult> = initial_results
             .iter()
             .map(|result| (result.doc_id.as_str(), result))
             .collect();
-        let fast_scores_by_doc: HashMap<&str, f32> = fast_hits
+        let fast_scores_by_doc: AHashMap<&str, f32> = fast_hits
             .iter()
             .map(|hit| (hit.doc_id.as_str(), hit.score))
             .collect();
-        let quality_scores_by_doc: HashMap<&str, f32> = quality_hits
+        let quality_scores_by_doc: AHashMap<&str, f32> = quality_hits
             .iter()
             .map(|hit| (hit.doc_id.as_str(), hit.score))
             .collect();
@@ -2192,7 +2192,7 @@ fn fused_hits_to_scored_results(
     fast_embedder_id: &str,
     rrf_k: f64,
 ) -> Vec<ScoredResult> {
-    let lexical_metadata_by_doc: HashMap<&str, serde_json::Value> = lexical_results
+    let lexical_metadata_by_doc: AHashMap<&str, serde_json::Value> = lexical_results
         .iter()
         .filter_map(|result| {
             result
@@ -4664,8 +4664,8 @@ mod tests {
 
     fn phase2_lookup_checksum_mapped(
         blended: &[VectorHit],
-        fast_scores_by_doc: &HashMap<&str, f32>,
-        quality_scores_by_doc: &HashMap<&str, f32>,
+        fast_scores_by_doc: &AHashMap<&str, f32>,
+        quality_scores_by_doc: &AHashMap<&str, f32>,
     ) -> f32 {
         blended.iter().fold(0.0_f32, |acc, hit| {
             let fast_score = fast_scores_by_doc
@@ -4711,11 +4711,11 @@ mod tests {
     #[test]
     fn phase2_lookup_maps_match_linear_scan_oracle() {
         let (fast_hits, quality_hits, blended) = build_phase2_lookup_fixture(10_000);
-        let fast_scores_by_doc: HashMap<&str, f32> = fast_hits
+        let fast_scores_by_doc: AHashMap<&str, f32> = fast_hits
             .iter()
             .map(|hit| (hit.doc_id.as_str(), hit.score))
             .collect();
-        let quality_scores_by_doc: HashMap<&str, f32> = quality_hits
+        let quality_scores_by_doc: AHashMap<&str, f32> = quality_hits
             .iter()
             .map(|hit| (hit.doc_id.as_str(), hit.score))
             .collect();
@@ -5408,11 +5408,11 @@ mod tests {
             .unwrap_or(80);
 
         let (fast_hits, quality_hits, blended) = build_phase2_lookup_fixture(doc_count);
-        let fast_scores_by_doc: HashMap<&str, f32> = fast_hits
+        let fast_scores_by_doc: AHashMap<&str, f32> = fast_hits
             .iter()
             .map(|hit| (hit.doc_id.as_str(), hit.score))
             .collect();
-        let quality_scores_by_doc: HashMap<&str, f32> = quality_hits
+        let quality_scores_by_doc: AHashMap<&str, f32> = quality_hits
             .iter()
             .map(|hit| (hit.doc_id.as_str(), hit.score))
             .collect();
