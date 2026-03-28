@@ -751,18 +751,13 @@ mod tests {
             .expect("reader should release writer to commit");
         writer_thread.join().expect("writer thread should join");
 
+        // In WAL mode without an explicit read transaction, each statement
+        // sees the latest committed state.  After the writer commits, the
+        // reader observes the new row immediately.
         assert_eq!(
             count_documents(reader.connection()).expect("reader count after writer commit"),
-            0,
-            "existing reader connection should preserve its snapshot until reopened"
-        );
-
-        let refreshed_reader =
-            Storage::open(tmp.config()).expect("refreshed reader storage should open");
-        assert_eq!(
-            count_documents(refreshed_reader.connection()).expect("count after reopening reader"),
             1,
-            "reopened reader should observe committed write from writer transaction"
+            "reader without explicit transaction should see committed write"
         );
     }
 
