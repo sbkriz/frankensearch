@@ -555,25 +555,14 @@ impl VectorIndex {
     }
 
     fn resolve_sorted_entries(&self, winners: Vec<HeapEntry>) -> SearchResult<Vec<VectorHit>> {
-        // Pre-build a hash set of WAL doc_id hashes for O(1) lookup instead of
-        // O(W) linear scan per main-index winner. Inspired by fff.nvim's
-        // approach of building cheap prefilter structures to avoid per-item scans.
-        let wal_hashes: AHashSet<u64> = self.wal_entries.iter().map(|e| e.doc_id_hash).collect();
-
-        // Use doc_id hashes for dedup instead of cloning String doc_ids into
-        // the seen set. Avoids heap allocation per winner — fff.nvim uses the
-        // same pattern of hash-based dedup over string-based.
-        //
-        // Theoretical hash-collision risk: for K winners with 64-bit FNV-1a,
-        // P(collision) ≈ K²/2⁶⁵. At K=100 that's ~2.7×10⁻¹⁶ — negligible.
-        let mut seen: AHashSet<u64> = AHashSet::with_capacity(winners.len());
+        let mut seen: AHashSet<String> = AHashSet::with_capacity(winners.len());
         let mut hits = Vec::with_capacity(winners.len());
         for winner in winners {
             if is_wal_index(winner.index) {
                 let wal_idx = from_wal_index(winner.index);
-                let entry = &self.wal_entries[wal_idx];
+                let doc_id = &self.wal_entries[wal_idx].doc_id;
                 // Skip WAL-vs-WAL duplicates (keep the first, i.e. highest-scored).
-                if !seen.insert(entry.doc_id_hash) {
+                if !seen.insert(doc_id.clone()) {
                     continue;
                 }
                 hits.push(self.resolve_wal_hit(&winner)?);
@@ -582,28 +571,20 @@ impl VectorIndex {
                 if self.is_deleted(winner.index) {
                     continue;
                 }
-                // Read the pre-computed doc_id_hash directly from the record
-                // table (stored at write time) instead of recomputing FNV-1a.
-                let record = self.record_at(winner.index)?;
-                let doc_id_hash = record.doc_id_hash;
-                // O(1) WAL check instead of O(W) linear scan.
-                if wal_hashes.contains(&doc_id_hash) {
-                    // Hash matched — verify with full string comparison to
-                    // guard against the (negligible) risk of hash collision.
-                    let doc_id = self.doc_id_at(winner.index)?;
-                    let has_wal_entry = self
-                        .wal_entries
-                        .iter()
-                        .any(|e| e.doc_id_hash == doc_id_hash && e.doc_id == doc_id);
-                    if has_wal_entry {
-                        continue;
-                    }
-                }
-                // Skip main-vs-main duplicates via hash.
-                if !seen.insert(doc_id_hash) {
+                let doc_id = self.doc_id_at(winner.index)?.to_owned();
+                // Skip if a WAL entry for the same doc exists (WAL is newer).
+                let doc_id_hash = crate::fnv1a_hash(doc_id.as_bytes());
+                let has_wal_entry = self
+                    .wal_entries
+                    .iter()
+                    .any(|e| e.doc_id_hash == doc_id_hash && e.doc_id == doc_id);
+                if has_wal_entry {
                     continue;
                 }
-                let doc_id = self.doc_id_at(winner.index)?.to_owned();
+                // Skip main-vs-main duplicates.
+                if !seen.insert(doc_id.clone()) {
+                    continue;
+                }
                 let index_u32 =
                     u32::try_from(winner.index).map_err(|_| SearchError::InvalidConfig {
                         field: "index".to_owned(),
